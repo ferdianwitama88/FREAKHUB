@@ -1,18 +1,18 @@
 
--- FREAKHUB v1.7 UNIVERSAL
--- Mobile-first structured interface
+-- FREAKHUB v1.8 UNIVERSAL
+-- Compact UI / Fly / Mount Fly / ESP Fix
 
-local Players=game:GetService('Players')
-local UIS=game:GetService('UserInputService')
-local Tween=game:GetService('TweenService')
-local PromptService=game:GetService('ProximityPromptService')
-local CollectionService=game:GetService('CollectionService')
+local Players=game:GetService("Players")
+local UIS=game:GetService("UserInputService")
+local RS=game:GetService("RunService")
+local Lighting=game:GetService("Lighting")
+local PromptService=game:GetService("ProximityPromptService")
 local LP=Players.LocalPlayer
 if not LP then return end
 
-local PG=LP:WaitForChild('PlayerGui')
-local previous=PG:FindFirstChild('FREAKHUB_V17')
-if previous then previous:Destroy() end
+local PG=LP:WaitForChild("PlayerGui")
+local old=PG:FindFirstChild("FREAKHUB_V18")
+if old then old:Destroy() end
 
 local C={
  bg=Color3.fromRGB(12,13,19),
@@ -24,7 +24,34 @@ local C={
  green=Color3.fromRGB(75,205,144)
 }
 
+local alive=true
 local connections={}
+local marks={}
+local itemMarks={}
+local results={}
+local slots={}
+local originalPrompts={}
+local noclipParts={}
+
+local states={
+ infinite=false,
+ noclip=false,
+ fly=false,
+ mountFly=false,
+ playerESP=false,
+ itemESP=false,
+ instant=false,
+ fullbright=false
+}
+
+local speed=16
+local jump=50
+local flySpeed=55
+local mountSpeed=65
+local radius=150
+local filter=""
+local vertical=0
+local activeFly=nil
 
 local function connect(signal,fn)
  local c=signal:Connect(fn)
@@ -32,70 +59,52 @@ local function connect(signal,fn)
  return c
 end
 
-local function new(class,parent,p)
+local function new(class,parent,props)
  local o=Instance.new(class)
- for k,v in pairs(p or {}) do
-  o[k]=v
- end
+ for k,v in pairs(props or {}) do o[k]=v end
  o.Parent=parent
  return o
 end
 
-local function corner(o,r)
- new('UICorner',o,{
-  CornerRadius=UDim.new(0,r or 10)
- })
+local function round(o,r)
+ new("UICorner",o,{CornerRadius=UDim.new(0,r or 9)})
 end
 
-local function stroke(o,color)
- new('UIStroke',o,{
-  Color=color or Color3.fromRGB(48,51,65),
-  Thickness=1
- })
-end
-
-local function label(parent,t,size,color,height)
- return new('TextLabel',parent,{
+local function label(parent,t,size,color)
+ return new("TextLabel",parent,{
   BackgroundTransparency=1,
-  Size=UDim2.new(1,0,0,height or 22),
+  Size=UDim2.new(1,0,0,20),
   Text=t,
   TextColor3=color or C.white,
+  TextSize=size or 12,
   Font=Enum.Font.GothamMedium,
-  TextSize=size or 13,
   TextXAlignment=Enum.TextXAlignment.Left,
-  TextWrapped=true
+  TextTruncate=Enum.TextTruncate.AtEnd
  })
 end
 
-local gui=new('ScreenGui',PG,{
- Name='FREAKHUB_V17',
+local gui=new("ScreenGui",PG,{
+ Name="FREAKHUB_V18",
  ResetOnSpawn=false,
- DisplayOrder=500,
- IgnoreGuiInset=false
+ DisplayOrder=500
 })
 
--- FLOATING LOGO
-
-local logo=new('TextButton',gui,{
- Name='FloatingF',
+local logo=new("TextButton",gui,{
  Size=UDim2.fromOffset(54,54),
- Position=UDim2.new(0,14,0.45,0),
+ Position=UDim2.new(0,14,.45,0),
  BackgroundColor3=C.bg,
- BorderSizePixel=0,
- Text='F',
+ Text="F",
  TextSize=32,
  Font=Enum.Font.GothamBlack,
  TextColor3=C.red,
+ BorderSizePixel=0,
  Active=true,
  AutoButtonColor=false
 })
+round(logo,17)
+new("UIStroke",logo,{Color=C.red,Thickness=2})
 
-corner(logo,17)
-stroke(logo,C.red)
-
--- MAIN WINDOW
-
-local window=new('Frame',gui,{
+local window=new("Frame",gui,{
  Size=UDim2.fromOffset(390,400),
  Position=UDim2.fromScale(.5,.5),
  AnchorPoint=Vector2.new(.5,.5),
@@ -104,52 +113,35 @@ local window=new('Frame',gui,{
  Visible=false,
  Active=true
 })
+round(window,16)
+new("UIStroke",window,{Color=C.card})
 
-corner(window,16)
-stroke(window)
-
-local head=new('Frame',window,{
+local head=new("Frame",window,{
  Size=UDim2.new(1,0,0,55),
  BackgroundTransparency=1,
  Active=true
 })
 
-new('TextLabel',head,{
- Position=UDim2.fromOffset(15,6),
- Size=UDim2.new(1,-60,0,24),
- BackgroundTransparency=1,
- Text='FREAKHUB',
- TextColor3=C.white,
- Font=Enum.Font.GothamBold,
- TextSize=18,
- TextXAlignment=Enum.TextXAlignment.Left
-})
+local title=label(head,"FREAKHUB",18)
+title.Position=UDim2.fromOffset(15,5)
+title.Size=UDim2.new(1,-60,0,26)
+title.Font=Enum.Font.GothamBold
 
-new('TextLabel',head,{
- Position=UDim2.fromOffset(16,29),
- Size=UDim2.new(1,-60,0,15),
- BackgroundTransparency=1,
- Text='UNIVERSAL  •  v1.7',
- TextColor3=C.red,
- Font=Enum.Font.GothamMedium,
- TextSize=10,
- TextXAlignment=Enum.TextXAlignment.Left
-})
+local sub=label(head,"UNIVERSAL  •  v1.8",10,C.red)
+sub.Position=UDim2.fromOffset(16,31)
 
-local close=new('TextButton',head,{
+local close=new("TextButton",head,{
  Size=UDim2.fromOffset(31,31),
  Position=UDim2.new(1,-41,0,12),
  BackgroundColor3=C.red,
- Text='×',
- TextSize=23,
+ BorderSizePixel=0,
+ Text="×",
  TextColor3=C.white,
- BorderSizePixel=0
+ TextSize=23
 })
-corner(close,9)
+round(close,9)
 
--- SIDEBAR
-
-local sidebar=new('ScrollingFrame',window,{
+local sidebar=new("ScrollingFrame",window,{
  Position=UDim2.fromOffset(10,60),
  Size=UDim2.new(0,106,1,-70),
  BackgroundColor3=C.panel,
@@ -158,155 +150,153 @@ local sidebar=new('ScrollingFrame',window,{
  AutomaticCanvasSize=Enum.AutomaticSize.Y,
  CanvasSize=UDim2.new()
 })
-corner(sidebar,12)
-
-new('UIPadding',sidebar,{
- PaddingTop=UDim.new(0,8),
- PaddingLeft=UDim.new(0,6),
- PaddingRight=UDim.new(0,6),
- PaddingBottom=UDim.new(0,8)
+round(sidebar,12)
+new("UIPadding",sidebar,{
+ PaddingTop=UDim.new(0,7),
+ PaddingLeft=UDim.new(0,5),
+ PaddingRight=UDim.new(0,5)
 })
-
-new('UIListLayout',sidebar,{
- Padding=UDim.new(0,6),
+new("UIListLayout",sidebar,{
+ Padding=UDim.new(0,5),
  SortOrder=Enum.SortOrder.LayoutOrder
 })
 
-local body=new('ScrollingFrame',window,{
+local body=new("ScrollingFrame",window,{
  Position=UDim2.fromOffset(124,60),
  Size=UDim2.new(1,-134,1,-70),
  BackgroundTransparency=1,
  BorderSizePixel=0,
- ScrollBarThickness=3,
+ ScrollBarThickness=2,
  ScrollBarImageColor3=C.red,
  AutomaticCanvasSize=Enum.AutomaticSize.Y,
  CanvasSize=UDim2.new()
 })
-
-new('UIListLayout',body,{
- Padding=UDim.new(0,9),
+new("UIListLayout",body,{
+ Padding=UDim.new(0,5),
  SortOrder=Enum.SortOrder.LayoutOrder
 })
 
 local function wipe()
  for _,o in ipairs(body:GetChildren()) do
-  if o:IsA('GuiObject') then
-   o:Destroy()
-  end
+  if o:IsA("GuiObject") then o:Destroy() end
  end
 end
 
-local function section(name,description)
- local f=new('Frame',body,{
-  Size=UDim2.new(1,-4,0,description and 52 or 31),
+local function heading(t)
+ local f=new("Frame",body,{
+  Size=UDim2.new(1,-3,0,27),
   BackgroundTransparency=1
  })
-
- local l=label(f,name,15,C.white,24)
+ local l=label(f,t,14)
  l.Font=Enum.Font.GothamBold
-
- if description then
-  local d=label(f,description,11,C.muted,26)
-  d.Position=UDim2.fromOffset(0,24)
- end
+ l.Position=UDim2.fromOffset(3,2)
 end
 
-local function card(title,description)
- local f=new('Frame',body,{
-  Size=UDim2.new(1,-4,0,description and 78 or 54),
+local function info(t)
+ local f=new("Frame",body,{
+  Size=UDim2.new(1,-3,0,38),
+  BackgroundColor3=C.panel,
+  BorderSizePixel=0
+ })
+ round(f,8)
+ local l=label(f,t,10,C.muted)
+ l.Position=UDim2.fromOffset(8,4)
+ l.Size=UDim2.new(1,-16,1,-8)
+ l.TextWrapped=true
+ l.TextTruncate=Enum.TextTruncate.None
+end
+
+local function button(t,fn)
+ local b=new("TextButton",body,{
+  Size=UDim2.new(1,-3,0,31),
+  BackgroundColor3=C.card,
+  BorderSizePixel=0,
+  Text=t,
+  TextColor3=C.white,
+  TextSize=11,
+  Font=Enum.Font.GothamMedium
+ })
+ round(b,8)
+ connect(b.Activated,fn)
+ return b
+end
+
+local function row(t)
+ local f=new("Frame",body,{
+  Size=UDim2.new(1,-3,0,35),
   BackgroundColor3=C.card,
   BorderSizePixel=0
  })
- corner(f,11)
-
- local t=label(f,title,12,C.white,23)
- t.Position=UDim2.fromOffset(11,7)
- t.Size=UDim2.new(1,-22,0,23)
-
- if description then
-  local d=label(f,description,10,C.muted,37)
-  d.Position=UDim2.fromOffset(11,29)
-  d.Size=UDim2.new(1,-22,0,37)
- end
+ round(f,8)
+ local l=label(f,t,11)
+ l.Position=UDim2.fromOffset(9,7)
+ l.Size=UDim2.new(.60,-9,0,20)
  return f
 end
 
-local function button(title,callback)
- local b=new('TextButton',body,{
-  Size=UDim2.new(1,-4,0,38),
-  BackgroundColor3=C.card,
+local function toggle(t,key,fn)
+ local f=row(t)
+ local b=new("TextButton",f,{
+  Position=UDim2.new(1,-66,0,5),
+  Size=UDim2.fromOffset(59,25),
   BorderSizePixel=0,
-  Text=title,
-  TextColor3=C.white,
-  TextSize=12,
-  Font=Enum.Font.GothamMedium
+  TextSize=10,
+  Font=Enum.Font.GothamBold,
+  TextColor3=C.white
  })
- corner(b,10)
- connect(b.Activated,callback)
- return b
-end
-
-local function field(hint,value)
- local b=new('TextBox',body,{
-  Size=UDim2.new(1,-4,0,36),
-  BackgroundColor3=C.card,
-  BorderSizePixel=0,
-  Text=value or '',
-  PlaceholderText=hint,
-  PlaceholderColor3=C.muted,
-  TextColor3=C.white,
-  TextSize=12,
-  Font=Enum.Font.Gotham,
-  ClearTextOnFocus=false
- })
- corner(b,10)
- return b
-end
-
-local states={
- infinite=false,
- playerESP=false,
- itemESP=false,
- instant=false,
- noclip=false,
- fullbright=false
-}
-
-local function toggle(title,key,callback)
- local b=button('',function() end)
-
+ round(b,7)
  local function paint()
-  b.Text=title..(states[key] and '   ● ON' or '   ○ OFF')
-  b.BackgroundColor3=states[key] and C.red or C.card
+  b.Text=states[key] and "ON" or "OFF"
+  b.BackgroundColor3=states[key] and C.red or C.panel
  end
-
  connect(b.Activated,function()
   states[key]=not states[key]
-  if callback then
-   callback(states[key])
-  end
+  if fn then fn(states[key]) end
   paint()
  end)
-
  paint()
- return b
 end
 
--- PLAYER SYSTEM
+local function numberRow(t,value,callback)
+ local f=row(t)
+ local box=new("TextBox",f,{
+  Position=UDim2.new(1,-105,0,5),
+  Size=UDim2.fromOffset(52,25),
+  BackgroundColor3=C.panel,
+  BorderSizePixel=0,
+  Text=tostring(value),
+  TextColor3=C.white,
+  TextSize=11,
+  ClearTextOnFocus=false
+ })
+ round(box,6)
+ local apply=new("TextButton",f,{
+  Position=UDim2.new(1,-49,0,5),
+  Size=UDim2.fromOffset(42,25),
+  BackgroundColor3=C.red,
+  BorderSizePixel=0,
+  Text="SET",
+  TextColor3=C.white,
+  TextSize=10
+ })
+ round(apply,6)
+ connect(apply.Activated,function()
+  callback(tonumber(box.Text))
+ end)
+ return box
+end
 
 local function hum()
- local ch=LP.Character
- return ch and ch:FindFirstChildOfClass('Humanoid')
+ local c=LP.Character
+ return c and c:FindFirstChildOfClass("Humanoid")
 end
 
 local function root()
- local ch=LP.Character
- return ch and ch:FindFirstChild('HumanoidRootPart')
+ local c=LP.Character
+ return c and c:FindFirstChild("HumanoidRootPart")
 end
 
-local speed,jump=16,50
-
-local function apply()
+local function applyPlayer()
  local h=hum()
  if h then
   h.WalkSpeed=speed
@@ -315,285 +305,299 @@ local function apply()
  end
 end
 
-connect(LP.CharacterAdded,function(ch)
- ch:WaitForChild('Humanoid',10)
- task.defer(apply)
+connect(LP.CharacterAdded,function(c)
+ c:WaitForChild("Humanoid",10)
+ task.defer(applyPlayer)
 end)
-
--- INFINITE JUMP
 
 connect(UIS.JumpRequest,function()
  if states.infinite then
   local h=hum()
-  if h then
-   h:ChangeState(Enum.HumanoidStateType.Jumping)
-  end
+  if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
  end
 end)
 
 -- NOCLIP
 
-connect(game:GetService('RunService').Stepped,function()
+local function restoreNoclip()
+ for p,value in pairs(noclipParts) do
+  if p.Parent then p.CanCollide=value end
+ end
+ table.clear(noclipParts)
+end
+
+connect(RS.Stepped,function()
  if states.noclip and LP.Character then
   for _,p in ipairs(LP.Character:GetDescendants()) do
-   if p:IsA('BasePart') then
+   if p:IsA("BasePart") then
+    if noclipParts[p]==nil then
+     noclipParts[p]=p.CanCollide
+    end
     p.CanCollide=false
    end
   end
  end
 end)
 
--- FULLBRIGHT
+-- FLY ENGINE
+-- Uses client-side LinearVelocity and AlignOrientation
 
-local lighting=game:GetService('Lighting')
+local function stopFly()
+ if activeFly then
+  for _,o in ipairs(activeFly.objects) do
+   if o and o.Parent then o:Destroy() end
+  end
+  activeFly=nil
+ end
+ vertical=0
+end
 
-local lightOld={
- Brightness=lighting.Brightness,
- ClockTime=lighting.ClockTime,
- FogEnd=lighting.FogEnd,
- GlobalShadows=lighting.GlobalShadows
-}
+local function startFly(part,mode)
+ stopFly()
+ if not part or not part:IsA("BasePart") then return false end
 
-local function fullbright(on)
+ local attachment=new("Attachment",part,{Name="FH_FlyAttachment"})
+
+ local velocity=new("LinearVelocity",part,{
+  Name="FH_FlyVelocity",
+  Attachment0=attachment,
+  RelativeTo=Enum.ActuatorRelativeTo.World,
+  VelocityConstraintMode=Enum.VelocityConstraintMode.Vector,
+  VectorVelocity=Vector3.zero,
+  MaxForce=1e9,
+  ForceLimitsEnabled=false
+ })
+
+ local orientation=new("AlignOrientation",part,{
+  Name="FH_FlyOrientation",
+  Attachment0=attachment,
+  Mode=Enum.OrientationAlignmentMode.OneAttachment,
+  MaxTorque=1e9,
+  Responsiveness=15,
+  RigidityEnabled=false
+ })
+
+ activeFly={
+  part=part,
+  mode=mode,
+  objects={attachment,velocity,orientation},
+  velocity=velocity,
+  orientation=orientation
+ }
+ return true
+end
+
+local function mountPart()
+ local h=hum()
+ if not h or not h.SeatPart then return nil end
+ local seat=h.SeatPart
+ local model=seat:FindFirstAncestorOfClass("Model")
+ if model and model.PrimaryPart then
+  return model.PrimaryPart
+ end
+ return seat
+end
+
+local function setFly(on)
  if on then
-  lighting.Brightness=3
-  lighting.ClockTime=14
-  lighting.FogEnd=100000
-  lighting.GlobalShadows=false
+  states.mountFly=false
+  startFly(root(),"player")
  else
-  for k,v in pairs(lightOld) do
-   lighting[k]=v
+  if activeFly and activeFly.mode=="player" then
+   stopFly()
   end
  end
 end
 
--- INSTANT PROMPT
-
-local promptOld={}
-
-local function updatePrompt(p)
- if not p:IsA('ProximityPrompt') then return end
-
- if promptOld[p]==nil then
-  promptOld[p]=p.HoldDuration
- end
-
- if states.instant then
-  p.HoldDuration=0
- end
-end
-
-local function instant(on)
+local function setMountFly(on)
  if on then
-  for _,p in ipairs(workspace:GetDescendants()) do
-   if p:IsA('ProximityPrompt') then
-    updatePrompt(p)
-   end
+  states.fly=false
+  local p=mountPart()
+  if not p then
+   states.mountFly=false
+   return
   end
+  startFly(p,"mount")
  else
-  for p,d in pairs(promptOld) do
-   if p.Parent then
-    p.HoldDuration=d
-   end
+  if activeFly and activeFly.mode=="mount" then
+   stopFly()
   end
-  table.clear(promptOld)
  end
 end
 
-connect(workspace.DescendantAdded,function(p)
- if states.instant and p:IsA('ProximityPrompt') then
-  task.defer(function()
-   if p.Parent then
-    updatePrompt(p)
-   end
-  end)
+connect(RS.Heartbeat,function()
+ if not activeFly then return end
+
+ local a=activeFly
+ if not a.part.Parent then
+  stopFly()
+  return
+ end
+
+ if a.mode=="player" and not states.fly then
+  stopFly()
+  return
+ end
+
+ if a.mode=="mount" then
+  if not states.mountFly or not hum() or not hum().SeatPart then
+   states.mountFly=false
+   stopFly()
+   return
+  end
+ end
+
+ local camera=workspace.CurrentCamera
+ if not camera then return end
+
+ local h=hum()
+ local move=h and h.MoveDirection or Vector3.zero
+ local magnitude=move.Magnitude
+
+ local direction=Vector3.zero
+ if magnitude>0 then
+  direction=move.Unit
+ end
+
+ local currentSpeed=a.mode=="mount" and mountSpeed or flySpeed
+
+ a.velocity.VectorVelocity=
+  direction*currentSpeed+
+  Vector3.new(0,vertical*currentSpeed,0)
+
+ local look=camera.CFrame.LookVector
+ local flat=Vector3.new(look.X,0,look.Z)
+ if flat.Magnitude>.01 then
+  a.orientation.CFrame=CFrame.lookAt(Vector3.zero,flat.Unit)
  end
 end)
 
-connect(PromptService.PromptShown,function(p)
- if states.instant then
-  updatePrompt(p)
+-- ESP ENGINE
+
+local function clearMarks(tbl)
+ for _,h in pairs(tbl) do
+  if h then h:Destroy() end
  end
-end)
+ table.clear(tbl)
+end
 
--- ESP SYSTEM
-
-local playerMarks,itemMarks={},{}
-
-local function mark(adornee,parent,color)
- if not adornee or not adornee.Parent then return end
-
- local h=new('Highlight',gui,{
-  Adornee=adornee,
-  FillColor=color or C.red,
+local function highlight(obj,color)
+ if not obj or not obj.Parent then return nil end
+ local h=new("Highlight",gui,{
+  Adornee=obj,
+  FillColor=color,
   OutlineColor=C.white,
-  FillTransparency=.68,
+  FillTransparency=.72,
   OutlineTransparency=0,
   DepthMode=Enum.HighlightDepthMode.AlwaysOnTop
  })
  return h
 end
 
-local function clearMarks(t)
- for _,h in pairs(t) do
-  if h then
+local function syncPlayers()
+ if not states.playerESP then
+  clearMarks(marks)
+  return
+ end
+
+ for p,h in pairs(marks) do
+  if not p.Parent or not p.Character
+   or not h.Parent or h.Adornee~=p.Character then
    h:Destroy()
+   marks[p]=nil
   end
  end
- table.clear(t)
-end
-
-local function updatePlayerESP()
- clearMarks(playerMarks)
-
- if not states.playerESP then return end
 
  for _,p in ipairs(Players:GetPlayers()) do
-  if p~=LP and p.Character then
-   playerMarks[p]=mark(p.Character,gui,C.red)
-  end
- end
-end
-
-connect(Players.PlayerAdded,function(p)
- connect(p.CharacterAdded,function()
-  task.wait(.4)
-  if states.playerESP then
-   updatePlayerESP()
-  end
- end)
-end)
-
-connect(Players.PlayerRemoving,function(p)
- if playerMarks[p] then
-  playerMarks[p]:Destroy()
-  playerMarks[p]=nil
- end
-end)
-
-for _,p in ipairs(Players:GetPlayers()) do
- if p~=LP then
-  connect(p.CharacterAdded,function()
-   task.wait(.4)
-   if states.playerESP then
-    updatePlayerESP()
+  if p~=LP and p.Character and p.Character.Parent then
+   if not marks[p] then
+    marks[p]=highlight(p.Character,C.red)
    end
-  end)
+  end
  end
 end
+
+-- Periodic sync handles respawns and streaming
+local espElapsed=0
+connect(RS.Heartbeat,function(dt)
+ espElapsed=espElapsed+dt
+ if espElapsed>=1.5 then
+  espElapsed=0
+  syncPlayers()
+ end
+end)
 
 -- UNIVERSAL ITEM SCANNER
 
 local keywords={
- 'coin','gem','diamond','loot','drop',
- 'chest','treasure','egg','collect',
- 'pickup','reward','item','crystal',
- 'fruit','key','token','orb','gift',
- 'tool','pet'
+ "coin","gem","diamond","loot","drop",
+ "chest","treasure","egg","collect",
+ "pickup","reward","item","crystal",
+ "fruit","key","token","orb","gift","tool"
 }
 
 local function keyword(s)
  s=string.lower(s)
-
  for _,k in ipairs(keywords) do
-  if string.find(s,k,1,true) then
-   return true
-  end
+  if string.find(s,k,1,true) then return true end
  end
  return false
 end
 
 local function collectible(o)
- if o:IsA('Tool') then return true end
-
- if not (o:IsA('BasePart') or o:IsA('Model')) then
+ if o:IsA("Tool") then return true end
+ if not (o:IsA("Model") or o:IsA("BasePart")) then
   return false
  end
-
  if keyword(o.Name) then return true end
-
- for _,t in ipairs(CollectionService:GetTags(o)) do
-  if keyword(t) then return true end
- end
-
- for k,v in pairs(o:GetAttributes()) do
-  if v~=false and keyword(k) then
-   return true
-  end
- end
-
- if o:FindFirstChildWhichIsA('ProximityPrompt',true) then
+ if o:FindFirstChildWhichIsA("ProximityPrompt",true) then
   return true
  end
-
  return false
 end
 
-local function position(o)
- if o:IsA('BasePart') then
-  return o.Position
- end
-
- if o:IsA('Model') then
-  return o:GetPivot().Position
- end
-
- if o:IsA('Tool') then
-  local h=o:FindFirstChild('Handle')
-  if h and h:IsA('BasePart') then
-   return h.Position
-  end
+local function pos(o)
+ if o:IsA("BasePart") then return o.Position end
+ if o:IsA("Model") then return o:GetPivot().Position end
+ if o:IsA("Tool") then
+  local handle=o:FindFirstChild("Handle")
+  if handle then return handle.Position end
  end
 end
 
-local radius,filter=150,''
-local results={}
-
 local function scan()
  table.clear(results)
-
  local r=root()
  if not r then return end
-
  local seen={}
 
  for _,o in ipairs(workspace:GetDescendants()) do
   if #results>=150 then break end
-
   if collectible(o) then
    local target=o
-
-   if o:IsA('BasePart') then
-    local m=o:FindFirstAncestorOfClass('Model')
-    if m and collectible(m) then
-     target=m
+   if o:IsA("BasePart") then
+    local model=o:FindFirstAncestorOfClass("Model")
+    if model and collectible(model) then
+     target=model
     end
    end
 
-   local char=LP.Character
-
+   local ch=LP.Character
    if target.Parent and not seen[target]
-    and not (char and target:IsDescendantOf(char)) then
-
-    local p=position(target)
-
+    and not (ch and target:IsDescendantOf(ch))
+    and not Players:GetPlayerFromCharacter(target) then
+    local p=pos(target)
     if p then
      local d=(p-r.Position).Magnitude
-
      if d<=radius and (
-      filter=='' or
-      string.find(
-       string.lower(target.Name),
-       string.lower(filter),
-       1,true
-      )
+      filter=="" or
+      string.find(string.lower(target.Name),string.lower(filter),1,true)
      ) then
       seen[target]=true
-
       table.insert(results,{
        obj=target,
-       dist=math.floor(d),
-       name=target.Name
+       name=target.Name,
+       distance=math.floor(d)
       })
      end
     end
@@ -602,337 +606,378 @@ local function scan()
  end
 
  table.sort(results,function(a,b)
-  return a.dist<b.dist
+  return a.distance<b.distance
  end)
 end
 
-local function updateItemESP()
+local function syncItems()
  clearMarks(itemMarks)
-
  if not states.itemESP then return end
-
  for _,entry in ipairs(results) do
   local obj=entry.obj
-
-  local target=obj:IsA('Tool')
-   and obj:FindFirstChild('Handle') or obj
-
-  if target then
-   table.insert(
-    itemMarks,
-    mark(target,gui,C.green)
-   )
+  if obj and obj.Parent then
+   local target=obj
+   if obj:IsA("Tool") then
+    target=obj:FindFirstChild("Handle")
+   end
+   if target then
+    local h=highlight(target,C.green)
+    if h then table.insert(itemMarks,h) end
+   end
   end
  end
 end
 
--- TELEPORT SLOTS
+-- INSTANT PROMPT
 
-local saved={}
+local function setInstant(on)
+ if on then
+  for _,p in ipairs(workspace:GetDescendants()) do
+   if p:IsA("ProximityPrompt") then
+    if originalPrompts[p]==nil then
+     originalPrompts[p]=p.HoldDuration
+    end
+    p.HoldDuration=0
+   end
+  end
+ else
+  for p,d in pairs(originalPrompts) do
+   if p.Parent then p.HoldDuration=d end
+  end
+  table.clear(originalPrompts)
+ end
+end
+
+connect(PromptService.PromptShown,function(p)
+ if states.instant then
+  if originalPrompts[p]==nil then
+   originalPrompts[p]=p.HoldDuration
+  end
+  p.HoldDuration=0
+ end
+end)
+
+connect(workspace.DescendantAdded,function(p)
+ if states.instant and p:IsA("ProximityPrompt") then
+  task.defer(function()
+   if p.Parent then
+    if originalPrompts[p]==nil then
+     originalPrompts[p]=p.HoldDuration
+    end
+    p.HoldDuration=0
+   end
+  end)
+ end
+end)
+
+-- FULLBRIGHT
+
+local lightOld={
+ Brightness=Lighting.Brightness,
+ ClockTime=Lighting.ClockTime,
+ FogEnd=Lighting.FogEnd,
+ GlobalShadows=Lighting.GlobalShadows
+}
+
+local function fullbright(on)
+ if on then
+  Lighting.Brightness=3
+  Lighting.ClockTime=14
+  Lighting.FogEnd=100000
+  Lighting.GlobalShadows=false
+ else
+  for k,v in pairs(lightOld) do
+   Lighting[k]=v
+  end
+ end
+end
+
+-- MOBILE FLY CONTROLS
+
+local controls=new("Frame",gui,{
+ Size=UDim2.fromOffset(115,105),
+ Position=UDim2.new(1,-125,1,-165),
+ BackgroundColor3=C.bg,
+ BackgroundTransparency=.15,
+ BorderSizePixel=0,
+ Visible=false
+})
+round(controls,12)
+
+local function holdButton(t,y,dir)
+ local b=new("TextButton",controls,{
+  Position=UDim2.fromOffset(8,y),
+  Size=UDim2.fromOffset(99,42),
+  BackgroundColor3=C.red,
+  BorderSizePixel=0,
+  Text=t,
+  TextColor3=C.white,
+  TextSize=13,
+  Font=Enum.Font.GothamBold
+ })
+ round(b,9)
+
+ connect(b.InputBegan,function(input)
+  if input.UserInputType==Enum.UserInputType.Touch
+   or input.UserInputType==Enum.UserInputType.MouseButton1 then
+   vertical=dir
+  end
+ end)
+
+ connect(b.InputEnded,function(input)
+  if input.UserInputType==Enum.UserInputType.Touch
+   or input.UserInputType==Enum.UserInputType.MouseButton1 then
+   if vertical==dir then vertical=0 end
+  end
+ end)
+end
+
+holdButton("▲ UP",7,1)
+holdButton("▼ DOWN",55,-1)
+
+-- PAGE CONTENT
+
 local pages={}
 local switch
 
--- DASHBOARD
-
-pages.Dashboard=function()
- section('Dashboard','Fitur utama dan status FREAKHUB.')
-
- card(
-  'FREAKHUB UNIVERSAL',
-  'v1.7 • Mobile UI • '..LP.Name
- )
-
- card(
-  'Status fitur',
-  'Infinite Jump: '..
-  (states.infinite and 'ON' or 'OFF')..
-  '  |  Player ESP: '..
-  (states.playerESP and 'ON' or 'OFF')
- )
-
- button('Buka Player',function()
-  switch('Player')
- end)
-
- button('Buka ESP',function()
-  switch('ESP')
- end)
-
- button('Buka Scanner',function()
-  switch('Scanner')
- end)
+pages.Home=function()
+ heading("Dashboard")
+ info("FREAKHUB UNIVERSAL v1.8")
+ info("Player: "..LP.Name)
+ info("Compact UI • Fly • ESP • Scanner")
+ button("PLAYER SETTINGS",function() switch("Player") end)
+ button("ESP CENTER",function() switch("ESP") end)
+ button("ITEM SCANNER",function() switch("Scanner") end)
 end
-
--- PLAYER TAB
 
 pages.Player=function()
- section('Player','Gerakan dan kemampuan karakter.')
-
- toggle('Infinite Jump','infinite')
- toggle('Noclip','noclip')
-
- local s=field('WalkSpeed',tostring(speed))
-
- button('Terapkan WalkSpeed',function()
-  speed=math.clamp(tonumber(s.Text) or 16,16,200)
-  apply()
+ heading("Player")
+ toggle("Infinite Jump","infinite")
+ toggle("Noclip","noclip",function(on)
+  if not on then restoreNoclip() end
  end)
 
- local j=field('JumpPower',tostring(jump))
-
- button('Terapkan JumpPower',function()
-  jump=math.clamp(tonumber(j.Text) or 50,50,200)
-  apply()
+ numberRow("Walk Speed",speed,function(v)
+  speed=math.clamp(v or 16,16,200)
+  applyPlayer()
  end)
 
- button('Reset Speed & Jump',function()
-  speed=16
-  jump=50
-  apply()
-  s.Text='16'
-  j.Text='50'
+ numberRow("Jump Power",jump,function(v)
+  jump=math.clamp(v or 50,50,200)
+  applyPlayer()
  end)
+
+ heading("Flight")
+ toggle("Fly","fly",function(on)
+  setFly(on)
+  controls.Visible=states.fly or states.mountFly
+ end)
+
+ numberRow("Fly Speed",flySpeed,function(v)
+  flySpeed=math.clamp(v or 55,10,200)
+ end)
+
+ toggle("Mount Fly","mountFly",function(on)
+  setMountFly(on)
+  controls.Visible=states.fly or states.mountFly
+  switch("Player")
+ end)
+
+ numberRow("Mount Speed",mountSpeed,function(v)
+  mountSpeed=math.clamp(v or 65,10,200)
+ end)
+
+ button("STOP ALL FLIGHT",function()
+  states.fly=false
+  states.mountFly=false
+  stopFly()
+  controls.Visible=false
+  switch("Player")
+ end)
+
+ info("Mount Fly memerlukan Seat/VehicleSeat aktif.")
 end
-
--- ESP TAB
 
 pages.ESP=function()
- section('ESP Center','Pengaturan visual dipisahkan dari scanner.')
+ heading("ESP Center")
+ toggle("Player ESP","playerESP",syncPlayers)
+ toggle("Item ESP","itemESP",syncItems)
 
- toggle('Player ESP','playerESP',function()
-  updatePlayerESP()
- end)
+ button("REFRESH PLAYER ESP",syncPlayers)
+ button("REFRESH ITEM ESP",syncItems)
 
- card(
-  'Player ESP',
-  'Menandai karakter pemain lain yang terlihat di client.'
- )
-
- toggle('Item ESP','itemESP',function()
-  updateItemESP()
- end)
-
- card(
-  'Item ESP',
-  'Menandai hasil Scanner terakhir. Scan dahulu untuk mendapatkan hasil.'
- )
-
- button('Refresh Player ESP',updatePlayerESP)
- button('Refresh Item ESP',updateItemESP)
-
- button('Clear All ESP',function()
+ button("CLEAR ALL ESP",function()
   states.playerESP=false
   states.itemESP=false
-  clearMarks(playerMarks)
+  clearMarks(marks)
   clearMarks(itemMarks)
-  switch('ESP')
+  switch("ESP")
  end)
-end
 
--- SCANNER TAB
+ info("Player ESP otomatis refresh setiap 1,5 detik.")
+end
 
 pages.Scanner=function()
- section('Item Scanner','Cari kandidat item pada berbagai game.')
+ heading("Item Scanner")
 
- local rad=field('Radius (25–500)',tostring(radius))
- local fil=field('Filter nama, kosong = semua',filter)
-
- button('Scan Sekarang',function()
-  radius=math.clamp(
-   tonumber(rad.Text) or 150,
-   25,500
-  )
-
-  filter=fil.Text
-  scan()
-
-  if states.itemESP then
-   updateItemESP()
-  end
-
-  switch('Results')
+ numberRow("Scan Radius",radius,function(v)
+  radius=math.clamp(v or 150,25,500)
  end)
 
- toggle('Instant Prompt','instant',instant)
+ local f=row("Name Filter")
+ local box=new("TextBox",f,{
+  Position=UDim2.new(.44,0,0,5),
+  Size=UDim2.new(.53,0,0,25),
+  BackgroundColor3=C.panel,
+  BorderSizePixel=0,
+  Text=filter,
+  PlaceholderText="All items",
+  PlaceholderColor3=C.muted,
+  TextColor3=C.white,
+  TextSize=10,
+  ClearTextOnFocus=false
+ })
+ round(box,6)
 
- card(
-  'Catatan',
-  'Instant Prompt hanya mengubah HoldDuration lokal; validasi server tetap berlaku.'
- )
+ button("SCAN NOW",function()
+  filter=box.Text
+  scan()
+  syncItems()
+  switch("Results")
+ end)
+
+ toggle("Instant Prompt","instant",setInstant)
+ info("Mencari kandidat item yang terlihat di client.")
 end
-
--- RESULTS TAB
 
 pages.Results=function()
- section(
-  'Hasil Scan',
-  tostring(#results)..' kandidat terdeteksi.'
- )
+ heading("Scan Results")
+ info("Found: "..#results.." candidates")
 
- button('Scan Ulang',function()
+ button("SCAN AGAIN",function()
   scan()
-
-  if states.itemESP then
-   updateItemESP()
-  end
-
-  switch('Results')
+  syncItems()
+  switch("Results")
  end)
 
- button('Aktifkan Item ESP',function()
-  states.itemESP=true
-  updateItemESP()
-  switch('ESP')
- end)
-
- for i,entry in ipairs(results) do
+ for i,e in ipairs(results) do
   if i>45 then break end
-
-  local obj=entry.obj
-
-  button(
-   entry.name..' • '..entry.dist..' studs',
-   function()
-    if obj and obj.Parent then
-     local t=obj:IsA('Tool')
-      and obj:FindFirstChild('Handle') or obj
-
-     if t then
-      table.insert(
-       itemMarks,
-       mark(t,gui,C.green)
-      )
-     end
+  button(e.name.." • "..e.distance.." studs",function()
+   local target=e.obj
+   if target and target.Parent then
+    if target:IsA("Tool") then
+     target=target:FindFirstChild("Handle")
     end
-   end
-  )
- end
-
- if #results==0 then
-  card(
-   'Belum ada hasil',
-   'Buka Scanner lalu tekan Scan Sekarang.'
-  )
- end
-end
-
--- TELEPORT TAB
-
-pages.Teleport=function()
- section(
-  'Teleport Slots',
-  'Simpan sampai 5 lokasi selama sesi.'
- )
-
- for i=1,5 do
-  local slot=i
-  local data=saved[slot]
-
-  local n=field(
-   'Nama Slot '..slot,
-   data and data.name or ''
-  )
-
-  button('Simpan Slot '..slot,function()
-   local r=root()
-
-   if r then
-    saved[slot]={
-     name=n.Text~='' and n.Text or 'Slot '..slot,
-     cf=r.CFrame
-    }
-
-    switch('Teleport')
+    if target then
+     local h=highlight(target,C.green)
+     if h then table.insert(itemMarks,h) end
+    end
    end
   end)
-
-  if data then
-   button('Teleport → '..data.name,function()
-    if LP.Character then
-     LP.Character:PivotTo(data.cf)
-    end
-   end)
-
-   button('Hapus Slot '..slot,function()
-    saved[slot]=nil
-    switch('Teleport')
-   end)
-  end
  end
 end
 
--- UTILITY TAB
+pages.Teleport=function()
+ heading("Teleport Slots")
+
+ for i=1,5 do
+  local index=i
+  local saved=slots[index]
+  local f=row("Slot "..index)
+
+  local save=new("TextButton",f,{
+   Position=UDim2.new(1,-102,0,5),
+   Size=UDim2.fromOffset(46,25),
+   BackgroundColor3=C.red,
+   BorderSizePixel=0,
+   Text="SAVE",
+   TextColor3=C.white,
+   TextSize=10
+  })
+  round(save,6)
+
+  local go=new("TextButton",f,{
+   Position=UDim2.new(1,-52,0,5),
+   Size=UDim2.fromOffset(45,25),
+   BackgroundColor3=C.panel,
+   BorderSizePixel=0,
+   Text="GO",
+   TextColor3=C.white,
+   TextSize=10
+  })
+  round(go,6)
+
+  connect(save.Activated,function()
+   local r=root()
+   if r then slots[index]=r.CFrame end
+  end)
+
+  connect(go.Activated,function()
+   if slots[index] and LP.Character then
+    LP.Character:PivotTo(slots[index])
+   end
+  end)
+ end
+
+ button("CLEAR ALL SLOTS",function()
+  table.clear(slots)
+ end)
+end
 
 pages.Utility=function()
- section('Utility','Pengaturan dunia dan antarmuka.')
+ heading("Utility")
+ toggle("Fullbright","fullbright",fullbright)
 
- toggle('Fullbright','fullbright',fullbright)
-
- button('Reset Posisi Logo',function()
+ button("RESET LOGO POSITION",function()
   logo.Position=UDim2.new(0,14,.45,0)
  end)
 
- button('Tutup Menu',function()
+ button("HIDE MENU",function()
   window.Visible=false
  end)
 
- card(
-  'Drag & Tap',
-  'Geser tombol F untuk pindah. Ketuk tombol F untuk membuka menu.'
- )
+ info("Drag tombol F untuk mengubah posisi.")
 end
 
--- TAB NAVIGATION
+-- SIDEBAR
 
-local tabButtons={}
+local tabs={}
 
 for i,name in ipairs({
- 'Dashboard',
- 'Player',
- 'ESP',
- 'Scanner',
- 'Results',
- 'Teleport',
- 'Utility'
+ "Home","Player","ESP","Scanner",
+ "Results","Teleport","Utility"
 }) do
-
- local b=new('TextButton',sidebar,{
-  Size=UDim2.new(1,0,0,38),
+ local b=new("TextButton",sidebar,{
+  Size=UDim2.new(1,0,0,36),
   BackgroundColor3=C.card,
   BorderSizePixel=0,
   Text=name,
+  TextColor3=C.white,
   TextSize=11,
   Font=Enum.Font.GothamMedium,
-  TextColor3=C.white,
   LayoutOrder=i
  })
-
- corner(b,9)
- tabButtons[name]=b
-
- connect(b.Activated,function()
-  switch(name)
- end)
+ round(b,8)
+ tabs[name]=b
+ connect(b.Activated,function() switch(name) end)
 end
 
 switch=function(name)
  wipe()
  pages[name]()
-
- for n,b in pairs(tabButtons) do
+ for n,b in pairs(tabs) do
   b.BackgroundColor3=n==name and C.red or C.card
  end
 end
 
--- MOBILE DRAG SYSTEM
+-- DRAG SUPPORT
 
-local function drag(handle,target,tap)
+local function draggable(handle,target,tap)
  local active,start,origin,moved=nil,nil,nil,false
 
  connect(handle.InputBegan,function(input)
   if input.UserInputType==Enum.UserInputType.Touch
    or input.UserInputType==Enum.UserInputType.MouseButton1 then
-
    active=input
    start=input.Position
    origin=target.Position
@@ -942,93 +987,52 @@ local function drag(handle,target,tap)
 
  connect(UIS.InputChanged,function(input)
   if not active then return end
-
-  if input~=active and not (
+  local mouse=
    active.UserInputType==Enum.UserInputType.MouseButton1
    and input.UserInputType==Enum.UserInputType.MouseMovement
-  ) then
-   return
-  end
 
+  if input~=active and not mouse then return end
   local delta=input.Position-start
-
-  if delta.Magnitude>8 then
-   moved=true
-  end
+  if delta.Magnitude>8 then moved=true end
 
   if moved then
    target.Position=UDim2.new(
-    origin.X.Scale,
-    origin.X.Offset+delta.X,
-    origin.Y.Scale,
-    origin.Y.Offset+delta.Y
+    origin.X.Scale,origin.X.Offset+delta.X,
+    origin.Y.Scale,origin.Y.Offset+delta.Y
    )
   end
  end)
 
  connect(UIS.InputEnded,function(input)
   if input~=active then return end
-
   active=nil
-
-  if not moved and tap then
-   tap()
-  end
+  if not moved and tap then tap() end
  end)
 end
 
-drag(logo,logo,function()
+draggable(logo,logo,function()
  window.Visible=not window.Visible
-
- if window.Visible then
-  local size=window.Size
-
-  window.Size=UDim2.new(
-   size.X.Scale,
-   size.X.Offset-12,
-   size.Y.Scale,
-   size.Y.Offset-12
-  )
-
-  Tween:Create(
-   window,
-   TweenInfo.new(.15),
-   {Size=size}
-  ):Play()
- end
 end)
-
-drag(head,window)
+draggable(head,window)
 
 connect(close.Activated,function()
  window.Visible=false
 end)
 
--- RESPONSIVE WINDOW
-
 local function fit()
  local cam=workspace.CurrentCamera
-
- if cam then
-  local v=cam.ViewportSize
-
-  window.Size=UDim2.fromOffset(
-   math.max(230,math.min(390,v.X-12)),
-   math.max(245,math.min(400,v.Y-28))
-  )
- end
+ if not cam then return end
+ local v=cam.ViewportSize
+ window.Size=UDim2.fromOffset(
+  math.min(390,math.max(220,v.X-12)),
+  math.min(400,math.max(240,v.Y-28))
+ )
 end
 
 fit()
-
-connect(
- workspace:GetPropertyChangedSignal('CurrentCamera'),
- fit
-)
-
 if workspace.CurrentCamera then
  connect(
-  workspace.CurrentCamera:GetPropertyChangedSignal('ViewportSize'),
+  workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"),
   fit
  )
 end
@@ -1036,15 +1040,13 @@ end
 -- CLEANUP
 
 connect(gui.Destroying,function()
- states.infinite=false
- states.noclip=false
- states.playerESP=false
- states.itemESP=false
-
- clearMarks(playerMarks)
+ alive=false
+ stopFly()
+ restoreNoclip()
+ clearMarks(marks)
  clearMarks(itemMarks)
-
- instant(false)
+ states.instant=false
+ setInstant(false)
  fullbright(false)
 
  for _,c in ipairs(connections) do
@@ -1052,6 +1054,5 @@ connect(gui.Destroying,function()
  end
 end)
 
-switch('Dashboard')
-
-print('FREAKHUB v1.7 UNIVERSAL LOADED')
+switch("Home")
+print("FREAKHUB v1.8 UNIVERSAL LOADED")
