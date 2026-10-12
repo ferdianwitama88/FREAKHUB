@@ -1,739 +1,1057 @@
--- FREAKHUB v1.6 UNIVERSAL
--- Black / Red | Mobile Friendly
 
-local Players = game:GetService("Players")
-local UIS = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local CollectionService = game:GetService("CollectionService")
-local ProximityPromptService = game:GetService("ProximityPromptService")
+-- FREAKHUB v1.7 UNIVERSAL
+-- Mobile-first structured interface
 
-local player = Players.LocalPlayer
-local pg = player:WaitForChild("PlayerGui")
+local Players=game:GetService('Players')
+local UIS=game:GetService('UserInputService')
+local Tween=game:GetService('TweenService')
+local PromptService=game:GetService('ProximityPromptService')
+local CollectionService=game:GetService('CollectionService')
+local LP=Players.LocalPlayer
+if not LP then return end
 
-local old = pg:FindFirstChild("FREAKHUB_UNIVERSAL")
-if old then old:Destroy() end
+local PG=LP:WaitForChild('PlayerGui')
+local previous=PG:FindFirstChild('FREAKHUB_V17')
+if previous then previous:Destroy() end
 
-local RED = Color3.fromRGB(224,45,65)
-local BG = Color3.fromRGB(14,14,19)
-local PANEL = Color3.fromRGB(27,27,35)
-local WHITE = Color3.fromRGB(245,245,248)
-local GRAY = Color3.fromRGB(165,165,178)
+local C={
+ bg=Color3.fromRGB(12,13,19),
+ panel=Color3.fromRGB(22,24,33),
+ card=Color3.fromRGB(30,33,43),
+ red=Color3.fromRGB(233,52,73),
+ white=Color3.fromRGB(242,243,248),
+ muted=Color3.fromRGB(151,156,172),
+ green=Color3.fromRGB(75,205,144)
+}
 
-local gui = Instance.new("ScreenGui")
-gui.Name = "FREAKHUB_UNIVERSAL"
-gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = false
-gui.DisplayOrder = 100
-gui.Parent = pg
+local connections={}
 
-local function create(class, parent, props)
-    local o = Instance.new(class)
-    for k,v in pairs(props or {}) do
-        o[k] = v
-    end
-    o.Parent = parent
-    return o
+local function connect(signal,fn)
+ local c=signal:Connect(fn)
+ table.insert(connections,c)
+ return c
 end
 
-local function round(o, r)
-    create("UICorner",o,{
-        CornerRadius = UDim.new(0,r)
-    })
+local function new(class,parent,p)
+ local o=Instance.new(class)
+ for k,v in pairs(p or {}) do
+  o[k]=v
+ end
+ o.Parent=parent
+ return o
 end
 
-local function text(parent,value,size)
-    return create("TextLabel",parent,{
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1,0,0,30),
-        Text = value,
-        TextColor3 = WHITE,
-        TextSize = size or 14,
-        Font = Enum.Font.GothamMedium,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextWrapped = true
-    })
+local function corner(o,r)
+ new('UICorner',o,{
+  CornerRadius=UDim.new(0,r or 10)
+ })
 end
 
-local function btn(parent,value,height)
-    local b = create("TextButton",parent,{
-        Size = UDim2.new(1,0,0,height or 38),
-        BackgroundColor3 = PANEL,
-        BorderSizePixel = 0,
-        Text = value,
-        TextColor3 = WHITE,
-        TextSize = 13,
-        Font = Enum.Font.GothamMedium,
-        AutoButtonColor = true
-    })
-    round(b,12)
-    return b
+local function stroke(o,color)
+ new('UIStroke',o,{
+  Color=color or Color3.fromRGB(48,51,65),
+  Thickness=1
+ })
 end
+
+local function label(parent,t,size,color,height)
+ return new('TextLabel',parent,{
+  BackgroundTransparency=1,
+  Size=UDim2.new(1,0,0,height or 22),
+  Text=t,
+  TextColor3=color or C.white,
+  Font=Enum.Font.GothamMedium,
+  TextSize=size or 13,
+  TextXAlignment=Enum.TextXAlignment.Left,
+  TextWrapped=true
+ })
+end
+
+local gui=new('ScreenGui',PG,{
+ Name='FREAKHUB_V17',
+ ResetOnSpawn=false,
+ DisplayOrder=500,
+ IgnoreGuiInset=false
+})
 
 -- FLOATING LOGO
-local logo = create("TextButton",gui,{
-    Name = "FloatingLogo",
-    Size = UDim2.fromOffset(58,58),
-    Position = UDim2.new(0,18,0.45,0),
-    BackgroundColor3 = BG,
-    BorderSizePixel = 0,
-    Text = "",
-    AutoButtonColor = false,
-    Active = true
-})
-round(logo,19)
 
-create("UIStroke",logo,{
-    Color = RED,
-    Thickness = 2
+local logo=new('TextButton',gui,{
+ Name='FloatingF',
+ Size=UDim2.fromOffset(54,54),
+ Position=UDim2.new(0,14,0.45,0),
+ BackgroundColor3=C.bg,
+ BorderSizePixel=0,
+ Text='F',
+ TextSize=32,
+ Font=Enum.Font.GothamBlack,
+ TextColor3=C.red,
+ Active=true,
+ AutoButtonColor=false
 })
 
-local logoText = create("TextLabel",logo,{
-    BackgroundTransparency = 1,
-    Size = UDim2.fromScale(1,1),
-    Text = "F",
-    TextColor3 = RED,
-    TextSize = 34,
-    Font = Enum.Font.GothamBlack
-})
+corner(logo,17)
+stroke(logo,C.red)
 
 -- MAIN WINDOW
-local main = create("Frame",gui,{
-    Size = UDim2.fromOffset(365,370),
-    AnchorPoint = Vector2.new(0.5,0.5),
-    Position = UDim2.fromScale(0.5,0.5),
-    BackgroundColor3 = BG,
-    BorderSizePixel = 0,
-    Visible = false,
-    Active = true
-})
-round(main,20)
 
-create("UIStroke",main,{
-    Color = Color3.fromRGB(70,30,40),
-    Thickness = 1
+local window=new('Frame',gui,{
+ Size=UDim2.fromOffset(390,400),
+ Position=UDim2.fromScale(.5,.5),
+ AnchorPoint=Vector2.new(.5,.5),
+ BackgroundColor3=C.bg,
+ BorderSizePixel=0,
+ Visible=false,
+ Active=true
 })
 
-local header = create("Frame",main,{
-    Size = UDim2.new(1,0,0,54),
-    BackgroundTransparency = 1,
-    Active = true
+corner(window,16)
+stroke(window)
+
+local head=new('Frame',window,{
+ Size=UDim2.new(1,0,0,55),
+ BackgroundTransparency=1,
+ Active=true
 })
 
-local title = create("TextLabel",header,{
-    Position = UDim2.fromOffset(17,5),
-    Size = UDim2.new(1,-65,1,-10),
-    BackgroundTransparency = 1,
-    Text = "FREAKHUB  v1.6",
-    TextColor3 = WHITE,
-    TextSize = 17,
-    Font = Enum.Font.GothamBold,
-    TextXAlignment = Enum.TextXAlignment.Left
+new('TextLabel',head,{
+ Position=UDim2.fromOffset(15,6),
+ Size=UDim2.new(1,-60,0,24),
+ BackgroundTransparency=1,
+ Text='FREAKHUB',
+ TextColor3=C.white,
+ Font=Enum.Font.GothamBold,
+ TextSize=18,
+ TextXAlignment=Enum.TextXAlignment.Left
 })
 
-local close = create("TextButton",header,{
-    Size = UDim2.fromOffset(34,34),
-    Position = UDim2.new(1,-43,0,10),
-    BackgroundColor3 = RED,
-    Text = "×",
-    TextColor3 = WHITE,
-    TextSize = 23,
-    BorderSizePixel = 0
-})
-round(close,12)
-
-local tabs = create("ScrollingFrame",main,{
-    Position = UDim2.fromOffset(10,55),
-    Size = UDim2.new(1,-20,0,42),
-    BackgroundTransparency = 1,
-    ScrollBarThickness = 0,
-    ScrollingDirection = Enum.ScrollingDirection.X,
-    AutomaticCanvasSize = Enum.AutomaticSize.X,
-    CanvasSize = UDim2.new()
+new('TextLabel',head,{
+ Position=UDim2.fromOffset(16,29),
+ Size=UDim2.new(1,-60,0,15),
+ BackgroundTransparency=1,
+ Text='UNIVERSAL  •  v1.7',
+ TextColor3=C.red,
+ Font=Enum.Font.GothamMedium,
+ TextSize=10,
+ TextXAlignment=Enum.TextXAlignment.Left
 })
 
-create("UIListLayout",tabs,{
-    FillDirection = Enum.FillDirection.Horizontal,
-    Padding = UDim.new(0,6)
+local close=new('TextButton',head,{
+ Size=UDim2.fromOffset(31,31),
+ Position=UDim2.new(1,-41,0,12),
+ BackgroundColor3=C.red,
+ Text='×',
+ TextSize=23,
+ TextColor3=C.white,
+ BorderSizePixel=0
+})
+corner(close,9)
+
+-- SIDEBAR
+
+local sidebar=new('ScrollingFrame',window,{
+ Position=UDim2.fromOffset(10,60),
+ Size=UDim2.new(0,106,1,-70),
+ BackgroundColor3=C.panel,
+ BorderSizePixel=0,
+ ScrollBarThickness=0,
+ AutomaticCanvasSize=Enum.AutomaticSize.Y,
+ CanvasSize=UDim2.new()
+})
+corner(sidebar,12)
+
+new('UIPadding',sidebar,{
+ PaddingTop=UDim.new(0,8),
+ PaddingLeft=UDim.new(0,6),
+ PaddingRight=UDim.new(0,6),
+ PaddingBottom=UDim.new(0,8)
 })
 
-local content = create("ScrollingFrame",main,{
-    Position = UDim2.fromOffset(15,105),
-    Size = UDim2.new(1,-30,1,-117),
-    BackgroundTransparency = 1,
-    BorderSizePixel = 0,
-    ScrollBarThickness = 3,
-    AutomaticCanvasSize = Enum.AutomaticSize.Y,
-    CanvasSize = UDim2.new()
+new('UIListLayout',sidebar,{
+ Padding=UDim.new(0,6),
+ SortOrder=Enum.SortOrder.LayoutOrder
 })
 
-create("UIListLayout",content,{
-    Padding = UDim.new(0,9)
+local body=new('ScrollingFrame',window,{
+ Position=UDim2.fromOffset(124,60),
+ Size=UDim2.new(1,-134,1,-70),
+ BackgroundTransparency=1,
+ BorderSizePixel=0,
+ ScrollBarThickness=3,
+ ScrollBarImageColor3=C.red,
+ AutomaticCanvasSize=Enum.AutomaticSize.Y,
+ CanvasSize=UDim2.new()
 })
 
-local function clear()
-    for _,v in ipairs(content:GetChildren()) do
-        if v:IsA("GuiObject") then
-            v:Destroy()
-        end
-    end
+new('UIListLayout',body,{
+ Padding=UDim.new(0,9),
+ SortOrder=Enum.SortOrder.LayoutOrder
+})
+
+local function wipe()
+ for _,o in ipairs(body:GetChildren()) do
+  if o:IsA('GuiObject') then
+   o:Destroy()
+  end
+ end
 end
 
-local function notice(message)
-    text(content,message,12).TextColor3 = GRAY
+local function section(name,description)
+ local f=new('Frame',body,{
+  Size=UDim2.new(1,-4,0,description and 52 or 31),
+  BackgroundTransparency=1
+ })
+
+ local l=label(f,name,15,C.white,24)
+ l.Font=Enum.Font.GothamBold
+
+ if description then
+  local d=label(f,description,11,C.muted,26)
+  d.Position=UDim2.fromOffset(0,24)
+ end
 end
 
-local function action(name,callback)
-    local b = btn(content,name)
-    b.Activated:Connect(callback)
-    return b
+local function card(title,description)
+ local f=new('Frame',body,{
+  Size=UDim2.new(1,-4,0,description and 78 or 54),
+  BackgroundColor3=C.card,
+  BorderSizePixel=0
+ })
+ corner(f,11)
+
+ local t=label(f,title,12,C.white,23)
+ t.Position=UDim2.fromOffset(11,7)
+ t.Size=UDim2.new(1,-22,0,23)
+
+ if description then
+  local d=label(f,description,10,C.muted,37)
+  d.Position=UDim2.fromOffset(11,29)
+  d.Size=UDim2.new(1,-22,0,37)
+ end
+ return f
 end
 
-local toggleStates = {}
-
-local function toggle(name,callback)
-    local b = btn(content,"")
-    local function refresh()
-        local on = toggleStates[name] == true
-        b.Text = name .. (on and "  ● ON" or "  ○ OFF")
-        b.BackgroundColor3 = on and RED or PANEL
-    end
-    b.Activated:Connect(function()
-        local on = not toggleStates[name]
-        toggleStates[name] = on
-        callback(on)
-        refresh()
-    end)
-    refresh()
+local function button(title,callback)
+ local b=new('TextButton',body,{
+  Size=UDim2.new(1,-4,0,38),
+  BackgroundColor3=C.card,
+  BorderSizePixel=0,
+  Text=title,
+  TextColor3=C.white,
+  TextSize=12,
+  Font=Enum.Font.GothamMedium
+ })
+ corner(b,10)
+ connect(b.Activated,callback)
+ return b
 end
 
-local function inputBox(placeholder,initial)
-    local box = create("TextBox",content,{
-        Size = UDim2.new(1,0,0,38),
-        BackgroundColor3 = PANEL,
-        BorderSizePixel = 0,
-        Text = initial or "",
-        PlaceholderText = placeholder,
-        TextColor3 = WHITE,
-        PlaceholderColor3 = GRAY,
-        TextSize = 13,
-        Font = Enum.Font.Gotham,
-        ClearTextOnFocus = false
-    })
-    round(box,12)
-    return box
+local function field(hint,value)
+ local b=new('TextBox',body,{
+  Size=UDim2.new(1,-4,0,36),
+  BackgroundColor3=C.card,
+  BorderSizePixel=0,
+  Text=value or '',
+  PlaceholderText=hint,
+  PlaceholderColor3=C.muted,
+  TextColor3=C.white,
+  TextSize=12,
+  Font=Enum.Font.Gotham,
+  ClearTextOnFocus=false
+ })
+ corner(b,10)
+ return b
 end
 
-local function humanoid()
-    local char = player.Character
-    return char and char:FindFirstChildOfClass("Humanoid")
+local states={
+ infinite=false,
+ playerESP=false,
+ itemESP=false,
+ instant=false,
+ noclip=false,
+ fullbright=false
+}
+
+local function toggle(title,key,callback)
+ local b=button('',function() end)
+
+ local function paint()
+  b.Text=title..(states[key] and '   ● ON' or '   ○ OFF')
+  b.BackgroundColor3=states[key] and C.red or C.card
+ end
+
+ connect(b.Activated,function()
+  states[key]=not states[key]
+  if callback then
+   callback(states[key])
+  end
+  paint()
+ end)
+
+ paint()
+ return b
+end
+
+-- PLAYER SYSTEM
+
+local function hum()
+ local ch=LP.Character
+ return ch and ch:FindFirstChildOfClass('Humanoid')
 end
 
 local function root()
-    local char = player.Character
-    return char and char:FindFirstChild("HumanoidRootPart")
+ local ch=LP.Character
+ return ch and ch:FindFirstChild('HumanoidRootPart')
 end
 
-local speed = 16
-local jump = 50
+local speed,jump=16,50
 
-local function applyPlayer()
-    local h = humanoid()
-    if h then
-        h.WalkSpeed = speed
-        h.UseJumpPower = true
-        h.JumpPower = jump
-    end
+local function apply()
+ local h=hum()
+ if h then
+  h.WalkSpeed=speed
+  h.UseJumpPower=true
+  h.JumpPower=jump
+ end
 end
 
-player.CharacterAdded:Connect(function(char)
-    char:WaitForChild("Humanoid",10)
-    applyPlayer()
+connect(LP.CharacterAdded,function(ch)
+ ch:WaitForChild('Humanoid',10)
+ task.defer(apply)
 end)
 
--- UNIVERSAL COLLECTIBLE SCANNER
-local scanRadius = 150
-local scanFilter = ""
-local scanResults = {}
-local highlights = {}
+-- INFINITE JUMP
 
-local keywords = {
-    "coin","gem","diamond","gold",
-    "loot","drop","chest","treasure",
-    "egg","pet","collect","pickup",
-    "reward","item","crystal",
-    "fruit","key","token","orb",
-    "weapon","tool","gift"
+connect(UIS.JumpRequest,function()
+ if states.infinite then
+  local h=hum()
+  if h then
+   h:ChangeState(Enum.HumanoidStateType.Jumping)
+  end
+ end
+end)
+
+-- NOCLIP
+
+connect(game:GetService('RunService').Stepped,function()
+ if states.noclip and LP.Character then
+  for _,p in ipairs(LP.Character:GetDescendants()) do
+   if p:IsA('BasePart') then
+    p.CanCollide=false
+   end
+  end
+ end
+end)
+
+-- FULLBRIGHT
+
+local lighting=game:GetService('Lighting')
+
+local lightOld={
+ Brightness=lighting.Brightness,
+ ClockTime=lighting.ClockTime,
+ FogEnd=lighting.FogEnd,
+ GlobalShadows=lighting.GlobalShadows
 }
 
-local function hasKeyword(s)
-    s = string.lower(s)
-    for _,word in ipairs(keywords) do
-        if string.find(s,word,1,true) then
-            return true
-        end
-    end
-    return false
-end
-
-local function candidate(obj)
-    if obj:IsA("Tool") then return true end
-    if not (obj:IsA("Model") or obj:IsA("BasePart")) then
-        return false
-    end
-
-    if hasKeyword(obj.Name) then return true end
-
-    local tags = CollectionService:GetTags(obj)
-    for _,tag in ipairs(tags) do
-        if hasKeyword(tag) then return true end
-    end
-
-    local attrs = obj:GetAttributes()
-    for key,value in pairs(attrs) do
-        if hasKeyword(key) and value ~= false then
-            return true
-        end
-    end
-
-    if obj:FindFirstChildWhichIsA("ProximityPrompt",true) then
-        return true
-    end
-
-    return false
-end
-
-local function objectPosition(obj)
-    if obj:IsA("BasePart") then
-        return obj.Position
-    end
-    if obj:IsA("Model") then
-        return obj:GetPivot().Position
-    end
-    if obj:IsA("Tool") then
-        local handle = obj:FindFirstChild("Handle")
-        if handle and handle:IsA("BasePart") then
-            return handle.Position
-        end
-    end
-    return nil
-end
-
-local function scan()
-    table.clear(scanResults)
-
-    local r = root()
-    if not r then return end
-
-    local seen = {}
-
-    for _,obj in ipairs(workspace:GetDescendants()) do
-        if #scanResults >= 150 then break end
-
-        if candidate(obj) then
-            local target = obj
-
-            -- Prefer outer collectible model over its parts
-            if obj:IsA("BasePart") then
-                local model = obj:FindFirstAncestorOfClass("Model")
-                if model and model ~= player.Character
-                    and candidate(model) then
-                    target = model
-                end
-            end
-
-            if not target:IsDescendantOf(player.Character or workspace)
-                and target.Parent
-                and not seen[target] then
-
-                local pos = objectPosition(target)
-
-                if pos then
-                    local dist = (pos-r.Position).Magnitude
-                    local nameMatches =
-                        scanFilter == ""
-                        or string.find(
-                            string.lower(target.Name),
-                            string.lower(scanFilter),
-                            1,true
-                        )
-
-                    if dist <= scanRadius and nameMatches then
-                        seen[target] = true
-                        table.insert(scanResults,{
-                            object = target,
-                            name = target.Name,
-                            distance = math.floor(dist)
-                        })
-                    end
-                end
-            end
-        end
-    end
-
-    table.sort(scanResults,function(a,b)
-        return a.distance < b.distance
-    end)
-end
-
-local function clearESP()
-    for _,h in ipairs(highlights) do
-        if h then h:Destroy() end
-    end
-    table.clear(highlights)
-end
-
-local function mark(obj)
-    if not obj or not obj.Parent then return end
-
-    local adornee = obj
-    if obj:IsA("Tool") then
-        adornee = obj:FindFirstChild("Handle")
-    end
-
-    if not adornee then return end
-
-    local h = Instance.new("Highlight")
-    h.Name = "FreakHubItemESP"
-    h.Adornee = adornee
-    h.FillColor = RED
-    h.OutlineColor = WHITE
-    h.FillTransparency = 0.55
-    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    h.Parent = gui
-
-    table.insert(highlights,h)
+local function fullbright(on)
+ if on then
+  lighting.Brightness=3
+  lighting.ClockTime=14
+  lighting.FogEnd=100000
+  lighting.GlobalShadows=false
+ else
+  for k,v in pairs(lightOld) do
+   lighting[k]=v
+  end
+ end
 end
 
 -- INSTANT PROMPT
-local instantEnabled = false
-local promptOriginal = {}
 
-local function processPrompt(p)
-    if not p:IsA("ProximityPrompt") then return end
+local promptOld={}
 
-    if promptOriginal[p] == nil then
-        promptOriginal[p] = p.HoldDuration
-    end
+local function updatePrompt(p)
+ if not p:IsA('ProximityPrompt') then return end
 
-    if instantEnabled then
-        p.HoldDuration = 0
-    end
+ if promptOld[p]==nil then
+  promptOld[p]=p.HoldDuration
+ end
+
+ if states.instant then
+  p.HoldDuration=0
+ end
 end
 
-local function setInstant(on)
-    instantEnabled = on
-
-    if on then
-        for _,obj in ipairs(workspace:GetDescendants()) do
-            if obj:IsA("ProximityPrompt") then
-                processPrompt(obj)
-            end
-        end
-    else
-        for p,duration in pairs(promptOriginal) do
-            if p and p.Parent then
-                p.HoldDuration = duration
-            end
-        end
-        table.clear(promptOriginal)
-    end
+local function instant(on)
+ if on then
+  for _,p in ipairs(workspace:GetDescendants()) do
+   if p:IsA('ProximityPrompt') then
+    updatePrompt(p)
+   end
+  end
+ else
+  for p,d in pairs(promptOld) do
+   if p.Parent then
+    p.HoldDuration=d
+   end
+  end
+  table.clear(promptOld)
+ end
 end
 
-workspace.DescendantAdded:Connect(function(obj)
-    if instantEnabled and obj:IsA("ProximityPrompt") then
-        task.defer(function()
-            if obj.Parent then processPrompt(obj) end
-        end)
-    end
+connect(workspace.DescendantAdded,function(p)
+ if states.instant and p:IsA('ProximityPrompt') then
+  task.defer(function()
+   if p.Parent then
+    updatePrompt(p)
+   end
+  end)
+ end
 end)
 
-ProximityPromptService.PromptShown:Connect(function(p)
-    if instantEnabled then
-        processPrompt(p)
-    end
+connect(PromptService.PromptShown,function(p)
+ if states.instant then
+  updatePrompt(p)
+ end
 end)
 
--- FIVE TELEPORT SLOTS
-local saved = {}
+-- ESP SYSTEM
 
-local pages = {}
-local selectTab
+local playerMarks,itemMarks={},{}
 
-pages.Home = function()
-    text(content,"WELCOME TO FREAKHUB",17)
-    notice("Universal Roblox GUI")
-    notice("Player: "..player.Name)
-    notice("Place ID: "..game.PlaceId)
-    notice("Theme: Black & Red")
-    notice("Version: 1.6")
+local function mark(adornee,parent,color)
+ if not adornee or not adornee.Parent then return end
+
+ local h=new('Highlight',gui,{
+  Adornee=adornee,
+  FillColor=color or C.red,
+  OutlineColor=C.white,
+  FillTransparency=.68,
+  OutlineTransparency=0,
+  DepthMode=Enum.HighlightDepthMode.AlwaysOnTop
+ })
+ return h
 end
 
-pages.Player = function()
-    text(content,"PLAYER SETTINGS",16)
-
-    local s = inputBox("WalkSpeed",tostring(speed))
-    action("Apply Speed",function()
-        speed = math.clamp(tonumber(s.Text) or 16,16,200)
-        applyPlayer()
-    end)
-
-    local j = inputBox("JumpPower",tostring(jump))
-    action("Apply Jump",function()
-        jump = math.clamp(tonumber(j.Text) or 50,50,200)
-        applyPlayer()
-    end)
-
-    action("Reset Player",function()
-        speed = 16
-        jump = 50
-        applyPlayer()
-        s.Text = "16"
-        j.Text = "50"
-    end)
+local function clearMarks(t)
+ for _,h in pairs(t) do
+  if h then
+   h:Destroy()
+  end
+ end
+ table.clear(t)
 end
 
-pages.Scanner = function()
-    text(content,"UNIVERSAL ITEM SCANNER",16)
-    notice("Mencari kandidat item yang tersedia di client.")
+local function updatePlayerESP()
+ clearMarks(playerMarks)
 
-    local radiusBox = inputBox(
-        "Scan radius",tostring(scanRadius)
-    )
-    local filterBox = inputBox(
-        "Filter nama (kosong = semua)",scanFilter
-    )
+ if not states.playerESP then return end
 
-    action("SCAN / REFRESH",function()
-        scanRadius = math.clamp(
-            tonumber(radiusBox.Text) or 150,25,500
-        )
-        scanFilter = filterBox.Text
-        scan()
-        selectTab("Results")
-    end)
-
-    toggle("Instant Prompt",setInstant)
-
-    action("Clear ESP",clearESP)
-
-    notice("Instant Prompt hanya mengubah HoldDuration lokal.")
-    notice("Server tetap menentukan apakah interaksi valid.")
+ for _,p in ipairs(Players:GetPlayers()) do
+  if p~=LP and p.Character then
+   playerMarks[p]=mark(p.Character,gui,C.red)
+  end
+ end
 end
 
-pages.Results = function()
-    text(content,"SCAN RESULTS",16)
-    notice("Ditemukan: "..#scanResults.." kandidat")
+connect(Players.PlayerAdded,function(p)
+ connect(p.CharacterAdded,function()
+  task.wait(.4)
+  if states.playerESP then
+   updatePlayerESP()
+  end
+ end)
+end)
 
-    action("ESP ALL RESULTS",function()
-        clearESP()
-        for _,item in ipairs(scanResults) do
-            mark(item.object)
-        end
-    end)
+connect(Players.PlayerRemoving,function(p)
+ if playerMarks[p] then
+  playerMarks[p]:Destroy()
+  playerMarks[p]=nil
+ end
+end)
 
-    action("CLEAR ESP",clearESP)
+for _,p in ipairs(Players:GetPlayers()) do
+ if p~=LP then
+  connect(p.CharacterAdded,function()
+   task.wait(.4)
+   if states.playerESP then
+    updatePlayerESP()
+   end
+  end)
+ end
+end
 
-    for i,item in ipairs(scanResults) do
-        if i > 60 then
-            notice("Hanya 60 hasil pertama ditampilkan.")
-            break
-        end
+-- UNIVERSAL ITEM SCANNER
 
-        local obj = item.object
-        local b = action(
-            item.name.."  •  "..item.distance.." studs  [ESP]",
-            function()
-                mark(obj)
-            end
-        )
-        b.TextSize = 11
+local keywords={
+ 'coin','gem','diamond','loot','drop',
+ 'chest','treasure','egg','collect',
+ 'pickup','reward','item','crystal',
+ 'fruit','key','token','orb','gift',
+ 'tool','pet'
+}
+
+local function keyword(s)
+ s=string.lower(s)
+
+ for _,k in ipairs(keywords) do
+  if string.find(s,k,1,true) then
+   return true
+  end
+ end
+ return false
+end
+
+local function collectible(o)
+ if o:IsA('Tool') then return true end
+
+ if not (o:IsA('BasePart') or o:IsA('Model')) then
+  return false
+ end
+
+ if keyword(o.Name) then return true end
+
+ for _,t in ipairs(CollectionService:GetTags(o)) do
+  if keyword(t) then return true end
+ end
+
+ for k,v in pairs(o:GetAttributes()) do
+  if v~=false and keyword(k) then
+   return true
+  end
+ end
+
+ if o:FindFirstChildWhichIsA('ProximityPrompt',true) then
+  return true
+ end
+
+ return false
+end
+
+local function position(o)
+ if o:IsA('BasePart') then
+  return o.Position
+ end
+
+ if o:IsA('Model') then
+  return o:GetPivot().Position
+ end
+
+ if o:IsA('Tool') then
+  local h=o:FindFirstChild('Handle')
+  if h and h:IsA('BasePart') then
+   return h.Position
+  end
+ end
+end
+
+local radius,filter=150,''
+local results={}
+
+local function scan()
+ table.clear(results)
+
+ local r=root()
+ if not r then return end
+
+ local seen={}
+
+ for _,o in ipairs(workspace:GetDescendants()) do
+  if #results>=150 then break end
+
+  if collectible(o) then
+   local target=o
+
+   if o:IsA('BasePart') then
+    local m=o:FindFirstAncestorOfClass('Model')
+    if m and collectible(m) then
+     target=m
     end
-end
+   end
 
-pages.Teleport = function()
-    text(content,"SAVE TELEPORT",16)
-    notice("Lima slot selama sesi permainan.")
+   local char=LP.Character
 
-    for i = 1,5 do
-        local slot = i
-        local info = saved[slot]
-        local name = info and info.name or ("Slot "..slot)
+   if target.Parent and not seen[target]
+    and not (char and target:IsDescendantOf(char)) then
 
-        text(content,name,13)
+    local p=position(target)
 
-        local nameBox = inputBox(
-            "Nama lokasi",info and info.name or ("Lokasi "..slot)
-        )
+    if p then
+     local d=(p-r.Position).Magnitude
 
-        action("SAVE SLOT "..slot,function()
-            local r = root()
-            if r then
-                saved[slot] = {
-                    name = nameBox.Text,
-                    cf = r.CFrame
-                }
-                selectTab("Teleport")
-            end
-        end)
+     if d<=radius and (
+      filter=='' or
+      string.find(
+       string.lower(target.Name),
+       string.lower(filter),
+       1,true
+      )
+     ) then
+      seen[target]=true
 
-        if info then
-            action("TELEPORT "..slot,function()
-                local char = player.Character
-                if char then
-                    char:PivotTo(saved[slot].cf)
-                end
-            end)
-
-            action("HAPUS SLOT "..slot,function()
-                saved[slot] = nil
-                selectTab("Teleport")
-            end)
-        end
+      table.insert(results,{
+       obj=target,
+       dist=math.floor(d),
+       name=target.Name
+      })
+     end
     end
+   end
+  end
+ end
+
+ table.sort(results,function(a,b)
+  return a.dist<b.dist
+ end)
 end
 
-pages.Settings = function()
-    text(content,"SETTINGS",16)
+local function updateItemESP()
+ clearMarks(itemMarks)
 
-    action("Hide Menu",function()
-        main.Visible = false
-    end)
+ if not states.itemESP then return end
 
-    action("Reset Floating Logo Position",function()
-        logo.Position = UDim2.new(0,18,0.45,0)
-    end)
+ for _,entry in ipairs(results) do
+  local obj=entry.obj
 
-    notice("Drag logo F untuk memindahkan posisinya.")
+  local target=obj:IsA('Tool')
+   and obj:FindFirstChild('Handle') or obj
+
+  if target then
+   table.insert(
+    itemMarks,
+    mark(target,gui,C.green)
+   )
+  end
+ end
+end
+
+-- TELEPORT SLOTS
+
+local saved={}
+local pages={}
+local switch
+
+-- DASHBOARD
+
+pages.Dashboard=function()
+ section('Dashboard','Fitur utama dan status FREAKHUB.')
+
+ card(
+  'FREAKHUB UNIVERSAL',
+  'v1.7 • Mobile UI • '..LP.Name
+ )
+
+ card(
+  'Status fitur',
+  'Infinite Jump: '..
+  (states.infinite and 'ON' or 'OFF')..
+  '  |  Player ESP: '..
+  (states.playerESP and 'ON' or 'OFF')
+ )
+
+ button('Buka Player',function()
+  switch('Player')
+ end)
+
+ button('Buka ESP',function()
+  switch('ESP')
+ end)
+
+ button('Buka Scanner',function()
+  switch('Scanner')
+ end)
+end
+
+-- PLAYER TAB
+
+pages.Player=function()
+ section('Player','Gerakan dan kemampuan karakter.')
+
+ toggle('Infinite Jump','infinite')
+ toggle('Noclip','noclip')
+
+ local s=field('WalkSpeed',tostring(speed))
+
+ button('Terapkan WalkSpeed',function()
+  speed=math.clamp(tonumber(s.Text) or 16,16,200)
+  apply()
+ end)
+
+ local j=field('JumpPower',tostring(jump))
+
+ button('Terapkan JumpPower',function()
+  jump=math.clamp(tonumber(j.Text) or 50,50,200)
+  apply()
+ end)
+
+ button('Reset Speed & Jump',function()
+  speed=16
+  jump=50
+  apply()
+  s.Text='16'
+  j.Text='50'
+ end)
+end
+
+-- ESP TAB
+
+pages.ESP=function()
+ section('ESP Center','Pengaturan visual dipisahkan dari scanner.')
+
+ toggle('Player ESP','playerESP',function()
+  updatePlayerESP()
+ end)
+
+ card(
+  'Player ESP',
+  'Menandai karakter pemain lain yang terlihat di client.'
+ )
+
+ toggle('Item ESP','itemESP',function()
+  updateItemESP()
+ end)
+
+ card(
+  'Item ESP',
+  'Menandai hasil Scanner terakhir. Scan dahulu untuk mendapatkan hasil.'
+ )
+
+ button('Refresh Player ESP',updatePlayerESP)
+ button('Refresh Item ESP',updateItemESP)
+
+ button('Clear All ESP',function()
+  states.playerESP=false
+  states.itemESP=false
+  clearMarks(playerMarks)
+  clearMarks(itemMarks)
+  switch('ESP')
+ end)
+end
+
+-- SCANNER TAB
+
+pages.Scanner=function()
+ section('Item Scanner','Cari kandidat item pada berbagai game.')
+
+ local rad=field('Radius (25–500)',tostring(radius))
+ local fil=field('Filter nama, kosong = semua',filter)
+
+ button('Scan Sekarang',function()
+  radius=math.clamp(
+   tonumber(rad.Text) or 150,
+   25,500
+  )
+
+  filter=fil.Text
+  scan()
+
+  if states.itemESP then
+   updateItemESP()
+  end
+
+  switch('Results')
+ end)
+
+ toggle('Instant Prompt','instant',instant)
+
+ card(
+  'Catatan',
+  'Instant Prompt hanya mengubah HoldDuration lokal; validasi server tetap berlaku.'
+ )
+end
+
+-- RESULTS TAB
+
+pages.Results=function()
+ section(
+  'Hasil Scan',
+  tostring(#results)..' kandidat terdeteksi.'
+ )
+
+ button('Scan Ulang',function()
+  scan()
+
+  if states.itemESP then
+   updateItemESP()
+  end
+
+  switch('Results')
+ end)
+
+ button('Aktifkan Item ESP',function()
+  states.itemESP=true
+  updateItemESP()
+  switch('ESP')
+ end)
+
+ for i,entry in ipairs(results) do
+  if i>45 then break end
+
+  local obj=entry.obj
+
+  button(
+   entry.name..' • '..entry.dist..' studs',
+   function()
+    if obj and obj.Parent then
+     local t=obj:IsA('Tool')
+      and obj:FindFirstChild('Handle') or obj
+
+     if t then
+      table.insert(
+       itemMarks,
+       mark(t,gui,C.green)
+      )
+     end
+    end
+   end
+  )
+ end
+
+ if #results==0 then
+  card(
+   'Belum ada hasil',
+   'Buka Scanner lalu tekan Scan Sekarang.'
+  )
+ end
+end
+
+-- TELEPORT TAB
+
+pages.Teleport=function()
+ section(
+  'Teleport Slots',
+  'Simpan sampai 5 lokasi selama sesi.'
+ )
+
+ for i=1,5 do
+  local slot=i
+  local data=saved[slot]
+
+  local n=field(
+   'Nama Slot '..slot,
+   data and data.name or ''
+  )
+
+  button('Simpan Slot '..slot,function()
+   local r=root()
+
+   if r then
+    saved[slot]={
+     name=n.Text~='' and n.Text or 'Slot '..slot,
+     cf=r.CFrame
+    }
+
+    switch('Teleport')
+   end
+  end)
+
+  if data then
+   button('Teleport → '..data.name,function()
+    if LP.Character then
+     LP.Character:PivotTo(data.cf)
+    end
+   end)
+
+   button('Hapus Slot '..slot,function()
+    saved[slot]=nil
+    switch('Teleport')
+   end)
+  end
+ end
+end
+
+-- UTILITY TAB
+
+pages.Utility=function()
+ section('Utility','Pengaturan dunia dan antarmuka.')
+
+ toggle('Fullbright','fullbright',fullbright)
+
+ button('Reset Posisi Logo',function()
+  logo.Position=UDim2.new(0,14,.45,0)
+ end)
+
+ button('Tutup Menu',function()
+  window.Visible=false
+ end)
+
+ card(
+  'Drag & Tap',
+  'Geser tombol F untuk pindah. Ketuk tombol F untuk membuka menu.'
+ )
 end
 
 -- TAB NAVIGATION
-local tabButtons = {}
 
-selectTab = function(name)
-    clear()
-    if pages[name] then pages[name]() end
+local tabButtons={}
 
-    for n,b in pairs(tabButtons) do
-        b.BackgroundColor3 = n == name and RED or PANEL
-    end
-end
-
-for _,name in ipairs({
-    "Home","Player","Scanner",
-    "Results","Teleport","Settings"
+for i,name in ipairs({
+ 'Dashboard',
+ 'Player',
+ 'ESP',
+ 'Scanner',
+ 'Results',
+ 'Teleport',
+ 'Utility'
 }) do
-    local b = btn(tabs,name,34)
-    b.Size = UDim2.fromOffset(85,34)
-    b.TextSize = 12
-    tabButtons[name] = b
-    b.Activated:Connect(function()
-        selectTab(name)
-    end)
+
+ local b=new('TextButton',sidebar,{
+  Size=UDim2.new(1,0,0,38),
+  BackgroundColor3=C.card,
+  BorderSizePixel=0,
+  Text=name,
+  TextSize=11,
+  Font=Enum.Font.GothamMedium,
+  TextColor3=C.white,
+  LayoutOrder=i
+ })
+
+ corner(b,9)
+ tabButtons[name]=b
+
+ connect(b.Activated,function()
+  switch(name)
+ end)
 end
 
--- MOBILE / MOUSE DRAG
-local function makeDraggable(handle,target,onTap)
-    local startInput = nil
-    local startPoint = nil
-    local startPosition = nil
-    local dragged = false
+switch=function(name)
+ wipe()
+ pages[name]()
 
-    handle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch
-        or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            startInput = input
-            startPoint = input.Position
-            startPosition = target.Position
-            dragged = false
-        end
-    end)
-
-    UIS.InputChanged:Connect(function(input)
-        if not startInput then return end
-
-        local mouseDrag =
-            startInput.UserInputType
-                == Enum.UserInputType.MouseButton1
-            and input.UserInputType
-                == Enum.UserInputType.MouseMovement
-
-        if input ~= startInput and not mouseDrag then
-            return
-        end
-
-        local delta = input.Position-startPoint
-
-        if delta.Magnitude > 8 then
-            dragged = true
-        end
-
-        if dragged then
-            target.Position = UDim2.new(
-                startPosition.X.Scale,
-                startPosition.X.Offset+delta.X,
-                startPosition.Y.Scale,
-                startPosition.Y.Offset+delta.Y
-            )
-        end
-    end)
-
-    UIS.InputEnded:Connect(function(input)
-        if input ~= startInput then return end
-
-        startInput = nil
-
-        if not dragged and onTap then
-            onTap()
-        end
-    end)
+ for n,b in pairs(tabButtons) do
+  b.BackgroundColor3=n==name and C.red or C.card
+ end
 end
 
-local function showMenu()
-    main.Visible = not main.Visible
+-- MOBILE DRAG SYSTEM
 
-    if main.Visible then
-        local finalSize = main.Size
-        main.Size = UDim2.new(
-            finalSize.X.Scale,
-            finalSize.X.Offset-18,
-            finalSize.Y.Scale,
-            finalSize.Y.Offset-18
-        )
+local function drag(handle,target,tap)
+ local active,start,origin,moved=nil,nil,nil,false
 
-        TweenService:Create(
-            main,
-            TweenInfo.new(0.18,Enum.EasingStyle.Quad),
-            {Size=finalSize}
-        ):Play()
-    end
+ connect(handle.InputBegan,function(input)
+  if input.UserInputType==Enum.UserInputType.Touch
+   or input.UserInputType==Enum.UserInputType.MouseButton1 then
+
+   active=input
+   start=input.Position
+   origin=target.Position
+   moved=false
+  end
+ end)
+
+ connect(UIS.InputChanged,function(input)
+  if not active then return end
+
+  if input~=active and not (
+   active.UserInputType==Enum.UserInputType.MouseButton1
+   and input.UserInputType==Enum.UserInputType.MouseMovement
+  ) then
+   return
+  end
+
+  local delta=input.Position-start
+
+  if delta.Magnitude>8 then
+   moved=true
+  end
+
+  if moved then
+   target.Position=UDim2.new(
+    origin.X.Scale,
+    origin.X.Offset+delta.X,
+    origin.Y.Scale,
+    origin.Y.Offset+delta.Y
+   )
+  end
+ end)
+
+ connect(UIS.InputEnded,function(input)
+  if input~=active then return end
+
+  active=nil
+
+  if not moved and tap then
+   tap()
+  end
+ end)
 end
 
-makeDraggable(logo,logo,showMenu)
-makeDraggable(header,main,nil)
+drag(logo,logo,function()
+ window.Visible=not window.Visible
 
-close.Activated:Connect(function()
-    main.Visible = false
+ if window.Visible then
+  local size=window.Size
+
+  window.Size=UDim2.new(
+   size.X.Scale,
+   size.X.Offset-12,
+   size.Y.Scale,
+   size.Y.Offset-12
+  )
+
+  Tween:Create(
+   window,
+   TweenInfo.new(.15),
+   {Size=size}
+  ):Play()
+ end
 end)
 
-local camera = workspace.CurrentCamera
-if camera then
-    local function resize()
-        local v = camera.ViewportSize
-        main.Size = UDim2.fromOffset(
-            math.min(365,v.X-18),
-            math.min(370,v.Y-35)
-        )
-    end
+drag(head,window)
 
-    resize()
-    camera:GetPropertyChangedSignal("ViewportSize"):Connect(resize)
-end
-
-gui.Destroying:Connect(function()
-    clearESP()
-    setInstant(false)
+connect(close.Activated,function()
+ window.Visible=false
 end)
 
-selectTab("Home")
+-- RESPONSIVE WINDOW
 
-print("FREAKHUB v1.6 UNIVERSAL LOADED")
+local function fit()
+ local cam=workspace.CurrentCamera
+
+ if cam then
+  local v=cam.ViewportSize
+
+  window.Size=UDim2.fromOffset(
+   math.max(230,math.min(390,v.X-12)),
+   math.max(245,math.min(400,v.Y-28))
+  )
+ end
+end
+
+fit()
+
+connect(
+ workspace:GetPropertyChangedSignal('CurrentCamera'),
+ fit
+)
+
+if workspace.CurrentCamera then
+ connect(
+  workspace.CurrentCamera:GetPropertyChangedSignal('ViewportSize'),
+  fit
+ )
+end
+
+-- CLEANUP
+
+connect(gui.Destroying,function()
+ states.infinite=false
+ states.noclip=false
+ states.playerESP=false
+ states.itemESP=false
+
+ clearMarks(playerMarks)
+ clearMarks(itemMarks)
+
+ instant(false)
+ fullbright(false)
+
+ for _,c in ipairs(connections) do
+  c:Disconnect()
+ end
+end)
+
+switch('Dashboard')
+
+print('FREAKHUB v1.7 UNIVERSAL LOADED')
