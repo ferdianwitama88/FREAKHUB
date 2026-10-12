@@ -1,17 +1,13 @@
 
 --[[
- FREAKHUB v1.9 UNIVERSAL
- Compact Mobile UI
- Player / Fly / Mount Fly
- Player ESP + Name Tags
- Item ESP + Name Tags
- Universal Scanner
- Training Target Lock
- Teleport / Utility
+ FREAKHUB v2.0 - BEST EFFORT
+ Compact mobile UI
+ Universal client-side utilities
 
- Target Lock requires CollectionService tag:
- "FreakHubTarget"
- on training dummy models.
+ Target Lock: NPC / dummy only
+ Aura Hit: nearby NPC + equipped Tool
+ Multi Action: ProximityPrompt interactions
+ Health: local best-effort only
 ]]
 
 local Players = game:GetService("Players")
@@ -19,25 +15,26 @@ local UIS = game:GetService("UserInputService")
 local RS = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local CollectionService = game:GetService("CollectionService")
-local PromptService = game:GetService("ProximityPromptService")
 
 local LP = Players.LocalPlayer
 if not LP then return end
 
 local PG = LP:WaitForChild("PlayerGui")
 
--- Remove older FREAKHUB interfaces
+-- Remove previous interfaces
 for _, name in ipairs({
     "FREAKHUB_V17",
     "FREAKHUB_V18",
     "FREAKHUB_V19",
-    "FREAKHUB_UNIVERSAL"
+    "FREAKHUB_V20"
 }) do
-    local old = PG:FindFirstChild(name)
-    if old then old:Destroy() end
+    local previous = PG:FindFirstChild(name)
+    if previous then
+        previous:Destroy()
+    end
 end
 
-local C = {
+local COLORS = {
     bg = Color3.fromRGB(12,13,19),
     panel = Color3.fromRGB(22,24,33),
     card = Color3.fromRGB(30,33,43),
@@ -47,340 +44,389 @@ local C = {
     green = Color3.fromRGB(75,205,144)
 }
 
-local alive = true
-local connections = {}
-local playerMarks = {}
-local itemMarks = {}
-local results = {}
-local slots = {}
-local originalPrompts = {}
-local noclipParts = {}
-
-local states = {
-    infinite = false,
+local enabled = {
+    infiniteJump = false,
     noclip = false,
     fly = false,
     mountFly = false,
+    health = false,
     playerESP = false,
     itemESP = false,
+    playerRefresh = true,
+    itemRefresh = false,
+    targetLock = false,
+    aura = false,
+    multi = false,
     instant = false,
-    fullbright = false,
-    aim = false
+    fullbright = false
 }
 
-local speed = 16
-local jump = 50
-local flySpeed = 55
-local mountSpeed = 65
-local radius = 150
-local filter = ""
+local config = {
+    walkSpeed = 16,
+    jumpPower = 50,
+    flySpeed = 55,
+    mountSpeed = 65,
+    scanRadius = 150,
+    espInterval = 1.5,
+    auraRadius = 12,
+    auraInterval = 0.5,
+    actionRadius = 15,
+    actionInterval = 1,
+    aimFOV = 180,
+    aimSmooth = 0.15,
+    aimPart = "Head",
+    actionMode = "Auto"
+}
 
-local aimRadius = 160
-local aimSmooth = 0.16
-local aimPart = "Head"
-local lockedTarget = nil
+local connections = {}
+local playerESP = {}
+local itemESP = {}
+local scanResults = {}
+local teleportSlots = {}
+local originalPrompts = {}
+local originalCollision = {}
+local originalLighting = {
+    Brightness = Lighting.Brightness,
+    ClockTime = Lighting.ClockTime,
+    FogEnd = Lighting.FogEnd,
+    GlobalShadows = Lighting.GlobalShadows
+}
 
-local vertical = 0
 local activeFly = nil
+local lockedTarget = nil
+local vertical = 0
+local forward = 0
+local selectedTab = "Home"
+local scanFilter = ""
+local alive = true
 
-local function connect(signal, fn)
+local function listen(signal, fn)
     local c = signal:Connect(fn)
     table.insert(connections, c)
     return c
 end
 
-local function new(class, parent, props)
+local function create(class, parent, properties)
     local obj = Instance.new(class)
-    for k,v in pairs(props or {}) do
+
+    for k, v in pairs(properties or {}) do
         obj[k] = v
     end
+
     obj.Parent = parent
     return obj
 end
 
-local function round(obj, radiusValue)
-    new("UICorner", obj, {
-        CornerRadius = UDim.new(0, radiusValue or 9)
+local function corner(obj, radius)
+    create("UICorner", obj, {
+        CornerRadius = UDim.new(0, radius or 8)
     })
 end
 
-local function label(parent, value, size, color)
-    return new("TextLabel", parent, {
+local function humanoid()
+    local ch = LP.Character
+    return ch and ch:FindFirstChildOfClass("Humanoid")
+end
+
+local function root()
+    local ch = LP.Character
+    return ch and ch:FindFirstChild("HumanoidRootPart")
+end
+
+local function distanceFrom(position)
+    local r = root()
+    if not r then return math.huge end
+    return (r.Position - position).Magnitude
+end
+
+local function getPosition(obj)
+    if obj:IsA("BasePart") then
+        return obj.Position
+    elseif obj:IsA("Model") then
+        return obj:GetPivot().Position
+    elseif obj:IsA("Tool") then
+        local handle = obj:FindFirstChild("Handle")
+        return handle and handle.Position
+    end
+end
+
+-- ====================================
+-- USER INTERFACE
+-- ====================================
+
+local gui = create("ScreenGui", PG, {
+    Name = "FREAKHUB_V20",
+    ResetOnSpawn = false,
+    DisplayOrder = 500
+})
+
+local logo = create("TextButton", gui, {
+    Size = UDim2.fromOffset(54,54),
+    Position = UDim2.new(0,14,0.45,0),
+    BackgroundColor3 = COLORS.bg,
+    BorderSizePixel = 0,
+    Text = "F",
+    TextSize = 32,
+    Font = Enum.Font.GothamBlack,
+    TextColor3 = COLORS.red,
+    Active = true,
+    AutoButtonColor = false
+})
+corner(logo,17)
+
+create("UIStroke",logo,{
+    Color = COLORS.red,
+    Thickness = 2
+})
+
+local window = create("Frame",gui,{
+    Size = UDim2.fromOffset(390,400),
+    Position = UDim2.fromScale(0.5,0.5),
+    AnchorPoint = Vector2.new(0.5,0.5),
+    BackgroundColor3 = COLORS.bg,
+    BorderSizePixel = 0,
+    Visible = false,
+    Active = true
+})
+corner(window,16)
+
+create("UIStroke",window,{
+    Color = COLORS.card
+})
+
+local header = create("Frame",window,{
+    Size = UDim2.new(1,0,0,55),
+    BackgroundTransparency = 1,
+    Active = true
+})
+
+local function text(parent,value,size,color)
+    return create("TextLabel",parent,{
         BackgroundTransparency = 1,
         Size = UDim2.new(1,0,0,20),
         Text = value,
-        TextColor3 = color or C.white,
-        TextSize = size or 12,
+        TextColor3 = color or COLORS.white,
+        TextSize = size or 11,
         Font = Enum.Font.GothamMedium,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextTruncate = Enum.TextTruncate.AtEnd
     })
 end
 
-local function hum()
-    local character = LP.Character
-    return character and character:FindFirstChildOfClass("Humanoid")
-end
+local title = text(header,"FREAKHUB",18)
+title.Position = UDim2.fromOffset(15,5)
+title.Font = Enum.Font.GothamBold
 
-local function root()
-    local character = LP.Character
-    return character and character:FindFirstChild("HumanoidRootPart")
-end
-
--- GUI
-
-local gui = new("ScreenGui", PG, {
-    Name = "FREAKHUB_V19",
-    ResetOnSpawn = false,
-    DisplayOrder = 500
-})
-
-local logo = new("TextButton", gui, {
-    Name = "FloatingF",
-    Size = UDim2.fromOffset(54,54),
-    Position = UDim2.new(0,14,0.45,0),
-    BackgroundColor3 = C.bg,
-    BorderSizePixel = 0,
-    Text = "F",
-    TextSize = 32,
-    Font = Enum.Font.GothamBlack,
-    TextColor3 = C.red,
-    Active = true,
-    AutoButtonColor = false
-})
-round(logo,17)
-new("UIStroke",logo,{
-    Color=C.red,
-    Thickness=2
-})
-
-local window = new("Frame",gui,{
-    Size=UDim2.fromOffset(390,400),
-    Position=UDim2.fromScale(.5,.5),
-    AnchorPoint=Vector2.new(.5,.5),
-    BackgroundColor3=C.bg,
-    BorderSizePixel=0,
-    Visible=false,
-    Active=true
-})
-round(window,16)
-new("UIStroke",window,{Color=C.card})
-
-local header = new("Frame",window,{
-    Size=UDim2.new(1,0,0,55),
-    BackgroundTransparency=1,
-    Active=true
-})
-
-local title = label(header,"FREAKHUB",18)
-title.Position=UDim2.fromOffset(15,5)
-title.Size=UDim2.new(1,-60,0,26)
-title.Font=Enum.Font.GothamBold
-
-local subtitle=label(
+local subtitle = text(
     header,
-    "UNIVERSAL  •  v1.9",
+    "UNIVERSAL  •  v2.0",
     10,
-    C.red
+    COLORS.red
 )
-subtitle.Position=UDim2.fromOffset(16,31)
+subtitle.Position = UDim2.fromOffset(16,31)
 
-local close=new("TextButton",header,{
-    Size=UDim2.fromOffset(31,31),
-    Position=UDim2.new(1,-41,0,12),
-    BackgroundColor3=C.red,
-    BorderSizePixel=0,
-    Text="×",
-    TextColor3=C.white,
-    TextSize=23
+local close = create("TextButton",header,{
+    Position = UDim2.new(1,-41,0,12),
+    Size = UDim2.fromOffset(31,31),
+    BackgroundColor3 = COLORS.red,
+    BorderSizePixel = 0,
+    Text = "×",
+    TextSize = 23,
+    TextColor3 = COLORS.white
 })
-round(close,9)
+corner(close,9)
 
-local sidebar=new("ScrollingFrame",window,{
-    Position=UDim2.fromOffset(10,60),
-    Size=UDim2.new(0,106,1,-70),
-    BackgroundColor3=C.panel,
-    BorderSizePixel=0,
-    ScrollBarThickness=0,
-    AutomaticCanvasSize=Enum.AutomaticSize.Y,
-    CanvasSize=UDim2.new()
+local sidebar = create("ScrollingFrame",window,{
+    Position = UDim2.fromOffset(10,60),
+    Size = UDim2.new(0,106,1,-70),
+    BackgroundColor3 = COLORS.panel,
+    BorderSizePixel = 0,
+    ScrollBarThickness = 0,
+    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+    CanvasSize = UDim2.new()
 })
-round(sidebar,12)
+corner(sidebar,12)
 
-new("UIPadding",sidebar,{
-    PaddingTop=UDim.new(0,7),
-    PaddingLeft=UDim.new(0,5),
-    PaddingRight=UDim.new(0,5)
-})
-
-new("UIListLayout",sidebar,{
-    Padding=UDim.new(0,5),
-    SortOrder=Enum.SortOrder.LayoutOrder
+create("UIPadding",sidebar,{
+    PaddingTop = UDim.new(0,7),
+    PaddingLeft = UDim.new(0,5),
+    PaddingRight = UDim.new(0,5)
 })
 
-local body=new("ScrollingFrame",window,{
-    Position=UDim2.fromOffset(124,60),
-    Size=UDim2.new(1,-134,1,-70),
-    BackgroundTransparency=1,
-    BorderSizePixel=0,
-    ScrollBarThickness=2,
-    ScrollBarImageColor3=C.red,
-    AutomaticCanvasSize=Enum.AutomaticSize.Y,
-    CanvasSize=UDim2.new()
+create("UIListLayout",sidebar,{
+    Padding = UDim.new(0,5),
+    SortOrder = Enum.SortOrder.LayoutOrder
 })
 
-new("UIListLayout",body,{
-    Padding=UDim.new(0,5),
-    SortOrder=Enum.SortOrder.LayoutOrder
+local body = create("ScrollingFrame",window,{
+    Position = UDim2.fromOffset(124,60),
+    Size = UDim2.new(1,-134,1,-70),
+    BackgroundTransparency = 1,
+    BorderSizePixel = 0,
+    ScrollBarThickness = 2,
+    ScrollBarImageColor3 = COLORS.red,
+    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+    CanvasSize = UDim2.new()
 })
 
-local function wipe()
-    for _,o in ipairs(body:GetChildren()) do
-        if o:IsA("GuiObject") then
-            o:Destroy()
+create("UIListLayout",body,{
+    Padding = UDim.new(0,5),
+    SortOrder = Enum.SortOrder.LayoutOrder
+})
+
+local function clearBody()
+    for _,obj in ipairs(body:GetChildren()) do
+        if obj:IsA("GuiObject") then
+            obj:Destroy()
         end
     end
 end
 
 local function heading(value)
-    local frame=new("Frame",body,{
-        Size=UDim2.new(1,-3,0,27),
-        BackgroundTransparency=1
+    local frame = create("Frame",body,{
+        Size = UDim2.new(1,-3,0,27),
+        BackgroundTransparency = 1
     })
 
-    local t=label(frame,value,14)
-    t.Font=Enum.Font.GothamBold
-    t.Position=UDim2.fromOffset(3,2)
+    local label = text(frame,value,14)
+    label.Font = Enum.Font.GothamBold
+    label.Position = UDim2.fromOffset(3,2)
 end
 
 local function info(value)
-    local frame=new("Frame",body,{
-        Size=UDim2.new(1,-3,0,39),
-        BackgroundColor3=C.panel,
-        BorderSizePixel=0
+    local frame = create("Frame",body,{
+        Size = UDim2.new(1,-3,0,40),
+        BackgroundColor3 = COLORS.panel,
+        BorderSizePixel = 0
     })
-    round(frame,8)
+    corner(frame,8)
 
-    local t=label(frame,value,10,C.muted)
-    t.Position=UDim2.fromOffset(8,4)
-    t.Size=UDim2.new(1,-16,1,-8)
-    t.TextWrapped=true
-    t.TextTruncate=Enum.TextTruncate.None
+    local label = text(frame,value,10,COLORS.muted)
+    label.Position = UDim2.fromOffset(8,4)
+    label.Size = UDim2.new(1,-16,1,-8)
+    label.TextWrapped = true
+    label.TextTruncate = Enum.TextTruncate.None
 end
 
 local function button(value,callback)
-    local b=new("TextButton",body,{
-        Size=UDim2.new(1,-3,0,31),
-        BackgroundColor3=C.card,
-        BorderSizePixel=0,
-        Text=value,
-        TextColor3=C.white,
-        TextSize=11,
-        Font=Enum.Font.GothamMedium
+    local b = create("TextButton",body,{
+        Size = UDim2.new(1,-3,0,31),
+        BackgroundColor3 = COLORS.card,
+        BorderSizePixel = 0,
+        Text = value,
+        TextColor3 = COLORS.white,
+        TextSize = 11,
+        Font = Enum.Font.GothamMedium
     })
-    round(b,8)
-    connect(b.Activated,callback)
+    corner(b,8)
+    listen(b.Activated,callback)
     return b
 end
 
 local function row(value)
-    local frame=new("Frame",body,{
-        Size=UDim2.new(1,-3,0,35),
-        BackgroundColor3=C.card,
-        BorderSizePixel=0
+    local frame = create("Frame",body,{
+        Size = UDim2.new(1,-3,0,35),
+        BackgroundColor3 = COLORS.card,
+        BorderSizePixel = 0
     })
-    round(frame,8)
+    corner(frame,8)
 
-    local t=label(frame,value,11)
-    t.Position=UDim2.fromOffset(9,7)
-    t.Size=UDim2.new(.55,-9,0,20)
+    local label = text(frame,value,11)
+    label.Position = UDim2.fromOffset(9,7)
+    label.Size = UDim2.new(0.55,-9,0,20)
 
     return frame
 end
 
 local function toggle(value,key,callback)
-    local frame=row(value)
+    local frame = row(value)
 
-    local b=new("TextButton",frame,{
-        Position=UDim2.new(1,-66,0,5),
-        Size=UDim2.fromOffset(59,25),
-        BackgroundColor3=C.panel,
-        BorderSizePixel=0,
-        TextColor3=C.white,
-        TextSize=10,
-        Font=Enum.Font.GothamBold
+    local b = create("TextButton",frame,{
+        Position = UDim2.new(1,-66,0,5),
+        Size = UDim2.fromOffset(59,25),
+        BackgroundColor3 = COLORS.panel,
+        BorderSizePixel = 0,
+        TextColor3 = COLORS.white,
+        TextSize = 10,
+        Font = Enum.Font.GothamBold
     })
-    round(b,7)
+    corner(b,7)
 
-    local function refresh()
-        b.Text=states[key] and "ON" or "OFF"
-        b.BackgroundColor3=
-            states[key] and C.red or C.panel
+    local function repaint()
+        b.Text = enabled[key] and "ON" or "OFF"
+        b.BackgroundColor3 =
+            enabled[key] and COLORS.red or COLORS.panel
     end
 
-    connect(b.Activated,function()
-        states[key]=not states[key]
+    listen(b.Activated,function()
+        enabled[key] = not enabled[key]
+
         if callback then
-            callback(states[key])
+            callback(enabled[key])
         end
-        refresh()
+
+        repaint()
     end)
 
-    refresh()
+    repaint()
 end
 
 local function numberRow(value,current,callback)
-    local frame=row(value)
+    local frame = row(value)
 
-    local input=new("TextBox",frame,{
-        Position=UDim2.new(1,-105,0,5),
-        Size=UDim2.fromOffset(52,25),
-        BackgroundColor3=C.panel,
-        BorderSizePixel=0,
-        Text=tostring(current),
-        TextColor3=C.white,
-        TextSize=11,
-        ClearTextOnFocus=false
+    local input = create("TextBox",frame,{
+        Position = UDim2.new(1,-105,0,5),
+        Size = UDim2.fromOffset(52,25),
+        BackgroundColor3 = COLORS.panel,
+        BorderSizePixel = 0,
+        Text = tostring(current),
+        TextColor3 = COLORS.white,
+        TextSize = 11,
+        ClearTextOnFocus = false
     })
-    round(input,6)
+    corner(input,6)
 
-    local set=new("TextButton",frame,{
-        Position=UDim2.new(1,-49,0,5),
-        Size=UDim2.fromOffset(42,25),
-        BackgroundColor3=C.red,
-        BorderSizePixel=0,
-        Text="SET",
-        TextColor3=C.white,
-        TextSize=10
+    local set = create("TextButton",frame,{
+        Position = UDim2.new(1,-49,0,5),
+        Size = UDim2.fromOffset(42,25),
+        BackgroundColor3 = COLORS.red,
+        BorderSizePixel = 0,
+        Text = "SET",
+        TextColor3 = COLORS.white,
+        TextSize = 10
     })
-    round(set,6)
+    corner(set,6)
 
-    connect(set.Activated,function()
+    listen(set.Activated,function()
         callback(tonumber(input.Text))
     end)
 
     return input
 end
 
+-- ====================================
 -- PLAYER
+-- ====================================
 
 local function applyPlayer()
-    local h=hum()
+    local h = humanoid()
+
     if h then
-        h.WalkSpeed=speed
-        h.UseJumpPower=true
-        h.JumpPower=jump
+        h.WalkSpeed = config.walkSpeed
+        h.UseJumpPower = true
+        h.JumpPower = config.jumpPower
     end
 end
 
-connect(LP.CharacterAdded,function(character)
+listen(LP.CharacterAdded,function(character)
     character:WaitForChild("Humanoid",10)
     task.defer(applyPlayer)
 end)
 
-connect(UIS.JumpRequest,function()
-    if states.infinite then
-        local h=hum()
+listen(UIS.JumpRequest,function()
+    if enabled.infiniteJump then
+        local h = humanoid()
+
         if h then
             h:ChangeState(
                 Enum.HumanoidStateType.Jumping
@@ -389,31 +435,64 @@ connect(UIS.JumpRequest,function()
     end
 end)
 
-local function restoreNoclip()
-    for p,value in pairs(noclipParts) do
-        if p.Parent then
-            p.CanCollide=value
+local function restoreCollision()
+    for part,oldValue in pairs(originalCollision) do
+        if part.Parent then
+            part.CanCollide = oldValue
         end
     end
-    table.clear(noclipParts)
+
+    table.clear(originalCollision)
 end
 
-connect(RS.Stepped,function()
-    if states.noclip and LP.Character then
-        for _,p in ipairs(
-            LP.Character:GetDescendants()
-        ) do
-            if p:IsA("BasePart") then
-                if noclipParts[p]==nil then
-                    noclipParts[p]=p.CanCollide
-                end
-                p.CanCollide=false
+listen(RS.Stepped,function()
+    if not enabled.noclip then return end
+
+    local ch = LP.Character
+    if not ch then return end
+
+    for _,part in ipairs(ch:GetDescendants()) do
+        if part:IsA("BasePart") then
+            if originalCollision[part] == nil then
+                originalCollision[part] = part.CanCollide
             end
+            part.CanCollide = false
         end
     end
 end)
 
--- FLY
+-- ====================================
+-- INFINITE HEALTH - BEST EFFORT
+-- ====================================
+
+local healthBusy = false
+
+local function maintainHealth()
+    if not enabled.health or healthBusy then return end
+
+    local h = humanoid()
+    if not h or h.Health <= 0 then return end
+
+    healthBusy = true
+
+    pcall(function()
+        if h.Health < h.MaxHealth then
+            h.Health = h.MaxHealth
+        end
+    end)
+
+    healthBusy = false
+end
+
+listen(RS.Heartbeat,function()
+    if enabled.health then
+        maintainHealth()
+    end
+end)
+
+-- ====================================
+-- FLY / MOUNT FLY
+-- ====================================
 
 local function stopFly()
     if activeFly then
@@ -422,9 +501,11 @@ local function stopFly()
                 obj:Destroy()
             end
         end
-        activeFly=nil
+        activeFly = nil
     end
-    vertical=0
+
+    vertical = 0
+    forward = 0
 end
 
 local function startFly(part,mode)
@@ -434,48 +515,51 @@ local function startFly(part,mode)
         return false
     end
 
-    local att=new("Attachment",part,{
-        Name="FH_FlyAttachment"
+    local attachment = create("Attachment",part,{
+        Name = "FH_FlightAttachment"
     })
 
-    local vel=new("LinearVelocity",part,{
-        Name="FH_FlyVelocity",
-        Attachment0=att,
-        RelativeTo=Enum.ActuatorRelativeTo.World,
-        VelocityConstraintMode=
+    local velocity = create("LinearVelocity",part,{
+        Name = "FH_FlightVelocity",
+        Attachment0 = attachment,
+        RelativeTo = Enum.ActuatorRelativeTo.World,
+        VelocityConstraintMode =
             Enum.VelocityConstraintMode.Vector,
-        VectorVelocity=Vector3.zero,
-        MaxForce=1e9,
-        ForceLimitsEnabled=false
+        VectorVelocity = Vector3.zero,
+        ForceLimitsEnabled = false,
+        MaxForce = 1e9
     })
 
-    local orient=new("AlignOrientation",part,{
-        Name="FH_FlyOrientation",
-        Attachment0=att,
-        Mode=Enum.OrientationAlignmentMode.OneAttachment,
-        MaxTorque=1e9,
-        Responsiveness=15
+    local orientation = create("AlignOrientation",part,{
+        Name = "FH_FlightOrientation",
+        Attachment0 = attachment,
+        Mode =
+            Enum.OrientationAlignmentMode.OneAttachment,
+        MaxTorque = 1e9,
+        Responsiveness = 15
     })
 
-    activeFly={
-        part=part,
-        mode=mode,
-        velocity=vel,
-        orientation=orient,
-        objects={att,vel,orient}
+    activeFly = {
+        part = part,
+        mode = mode,
+        velocity = velocity,
+        orientation = orientation,
+        objects = {
+            attachment,
+            velocity,
+            orientation
+        }
     }
 
     return true
 end
 
-local function mountPart()
-    local h=hum()
-    if not h or not h.SeatPart then
-        return nil
-    end
+local function getMountPart()
+    local h = humanoid()
+    if not h or not h.SeatPart then return nil end
 
-    local seat=h.SeatPart
-    local model=seat:FindFirstAncestorOfClass("Model")
+    local seat = h.SeatPart
+    local model = seat:FindFirstAncestorOfClass("Model")
 
     if model and model.PrimaryPart then
         return model.PrimaryPart
@@ -486,258 +570,323 @@ end
 
 local function setFly(on)
     if on then
-        states.mountFly=false
+        enabled.mountFly = false
         if not startFly(root(),"player") then
-            states.fly=false
+            enabled.fly = false
         end
-    elseif activeFly and activeFly.mode=="player" then
+    elseif activeFly and activeFly.mode == "player" then
         stopFly()
     end
 end
 
 local function setMountFly(on)
     if on then
-        states.fly=false
-
-        if not startFly(mountPart(),"mount") then
-            states.mountFly=false
+        enabled.fly = false
+        if not startFly(getMountPart(),"mount") then
+            enabled.mountFly = false
         end
-    elseif activeFly and activeFly.mode=="mount" then
+    elseif activeFly and activeFly.mode == "mount" then
         stopFly()
     end
 end
 
-connect(RS.Heartbeat,function()
-    if not activeFly then return end
+listen(RS.Heartbeat,function()
+    local a = activeFly
+    if not a then return end
 
-    local a=activeFly
     if not a.part.Parent then
         stopFly()
         return
     end
 
-    if a.mode=="player" and not states.fly then
+    if a.mode == "player" and not enabled.fly then
         stopFly()
         return
     end
 
-    if a.mode=="mount" then
-        local h=hum()
-        if not states.mountFly or not h or not h.SeatPart then
-            states.mountFly=false
+    if a.mode == "mount" then
+        local h = humanoid()
+
+        if not enabled.mountFly
+            or not h
+            or not h.SeatPart then
+            enabled.mountFly = false
             stopFly()
             return
         end
     end
 
-    local camera=workspace.CurrentCamera
+    local camera = workspace.CurrentCamera
     if not camera then return end
 
-    local h=hum()
-    local move=h and h.MoveDirection or Vector3.zero
+    local h = humanoid()
+    local move = h and h.MoveDirection or Vector3.zero
 
-    local currentSpeed=
-        a.mode=="mount" and mountSpeed or flySpeed
+    local look = camera.CFrame.LookVector
+    local flat = Vector3.new(look.X,0,look.Z)
 
-    a.velocity.VectorVelocity=
-        move*currentSpeed+
-        Vector3.new(0,vertical*currentSpeed,0)
-
-    local look=camera.CFrame.LookVector
-    local flat=Vector3.new(look.X,0,look.Z)
-
-    if flat.Magnitude>.01 then
-        a.orientation.CFrame=
-            CFrame.lookAt(Vector3.zero,flat.Unit)
+    if flat.Magnitude > 0.01 then
+        flat = flat.Unit
+    else
+        flat = Vector3.new(0,0,-1)
     end
+
+    local currentSpeed =
+        a.mode == "mount"
+        and config.mountSpeed
+        or config.flySpeed
+
+    a.velocity.VectorVelocity =
+        move * currentSpeed
+        + flat * forward * currentSpeed
+        + Vector3.new(
+            0,
+            vertical * currentSpeed,
+            0
+        )
+
+    a.orientation.CFrame =
+        CFrame.lookAt(Vector3.zero,flat)
 end)
 
--- ESP + NAME TAGS
+-- Flight buttons
 
-local function clearMarks(tbl)
-    for _,entry in pairs(tbl) do
-        for _,obj in pairs(entry) do
-            if typeof(obj)=="Instance" then
-                obj:Destroy()
-            end
+local flightControls = create("Frame",gui,{
+    Size = UDim2.fromOffset(180,112),
+    Position = UDim2.new(1,-190,1,-175),
+    BackgroundColor3 = COLORS.bg,
+    BackgroundTransparency = 0.1,
+    BorderSizePixel = 0,
+    Visible = false
+})
+corner(flightControls,12)
+
+local function flightButton(value,x,y,axis,amount)
+    local b = create("TextButton",flightControls,{
+        Position = UDim2.fromOffset(x,y),
+        Size = UDim2.fromOffset(80,45),
+        BackgroundColor3 = COLORS.red,
+        BorderSizePixel = 0,
+        Text = value,
+        TextColor3 = COLORS.white,
+        TextSize = 11,
+        Font = Enum.Font.GothamBold
+    })
+    corner(b,8)
+
+    local function set(value)
+        if axis == "vertical" then
+            vertical = value
+        else
+            forward = value
         end
+    end
+
+    listen(b.InputBegan,function(input)
+        if input.UserInputType ==
+            Enum.UserInputType.Touch
+            or input.UserInputType ==
+            Enum.UserInputType.MouseButton1 then
+            set(amount)
+        end
+    end)
+
+    listen(b.InputEnded,function(input)
+        if input.UserInputType ==
+            Enum.UserInputType.Touch
+            or input.UserInputType ==
+            Enum.UserInputType.MouseButton1 then
+            set(0)
+        end
+    end)
+end
+
+flightButton("▲ UP",7,8,"vertical",1)
+flightButton("FORWARD",93,8,"forward",1)
+flightButton("▼ DOWN",7,59,"vertical",-1)
+flightButton("BACK",93,59,"forward",-1)
+
+-- ====================================
+-- ESP + NAME TAGS
+-- ====================================
+
+local function removeESP(entry)
+    if not entry then return end
+
+    if entry.highlight then
+        entry.highlight:Destroy()
+    end
+
+    if entry.tag then
+        entry.tag:Destroy()
+    end
+end
+
+local function clearESP(tbl)
+    for _,entry in pairs(tbl) do
+        removeESP(entry)
     end
     table.clear(tbl)
 end
 
-local function makeESP(target,name,color)
-    if not target or not target.Parent then
-        return nil
-    end
+local function makeESP(obj,name,color)
+    if not obj or not obj.Parent then return nil end
 
-    local adorneePart
+    local part
 
-    if target:IsA("BasePart") then
-        adorneePart=target
-    elseif target:IsA("Model") then
-        adorneePart=
-            target:FindFirstChild("Head")
-            or target.PrimaryPart
-            or target:FindFirstChildWhichIsA(
+    if obj:IsA("BasePart") then
+        part = obj
+    elseif obj:IsA("Model") then
+        part = obj:FindFirstChild("Head")
+            or obj.PrimaryPart
+            or obj:FindFirstChildWhichIsA(
                 "BasePart",true
             )
     end
 
-    if not adorneePart then return nil end
+    if not part then return nil end
 
-    local highlight=new("Highlight",gui,{
-        Adornee=target,
-        FillColor=color,
-        OutlineColor=C.white,
-        FillTransparency=.75,
-        OutlineTransparency=0,
-        DepthMode=Enum.HighlightDepthMode.AlwaysOnTop
+    local highlight = create("Highlight",gui,{
+        Adornee = obj,
+        FillColor = color,
+        OutlineColor = COLORS.white,
+        FillTransparency = 0.75,
+        OutlineTransparency = 0,
+        DepthMode =
+            Enum.HighlightDepthMode.AlwaysOnTop
     })
 
-    local tag=new("BillboardGui",gui,{
-        Name="FH_NameTag",
-        Adornee=adorneePart,
-        Size=UDim2.fromOffset(135,36),
-        StudsOffsetWorldSpace=Vector3.new(0,2.8,0),
-        AlwaysOnTop=true,
-        MaxDistance=500
+    local tag = create("BillboardGui",gui,{
+        Name = "FH_ESPTag",
+        Adornee = part,
+        Size = UDim2.fromOffset(140,35),
+        StudsOffsetWorldSpace = Vector3.new(0,2.6,0),
+        AlwaysOnTop = true,
+        MaxDistance = 500
     })
 
-    local nameText=new("TextLabel",tag,{
-        Size=UDim2.new(1,0,0,19),
-        BackgroundTransparency=1,
-        Text=name,
-        TextColor3=C.white,
-        TextStrokeColor3=Color3.new(0,0,0),
-        TextStrokeTransparency=.15,
-        Font=Enum.Font.GothamBold,
-        TextSize=11,
-        TextScaled=false
+    create("TextLabel",tag,{
+        Size = UDim2.new(1,0,0,19),
+        BackgroundTransparency = 1,
+        Text = name,
+        TextColor3 = COLORS.white,
+        TextStrokeColor3 = Color3.new(0,0,0),
+        TextStrokeTransparency = 0.1,
+        TextSize = 10,
+        Font = Enum.Font.GothamBold
     })
 
-    local distanceText=new("TextLabel",tag,{
-        Position=UDim2.fromOffset(0,19),
-        Size=UDim2.new(1,0,0,15),
-        BackgroundTransparency=1,
-        Text="",
-        TextColor3=color,
-        TextStrokeColor3=Color3.new(0,0,0),
-        TextStrokeTransparency=.15,
-        Font=Enum.Font.GothamMedium,
-        TextSize=9
+    local distanceLabel = create("TextLabel",tag,{
+        Position = UDim2.fromOffset(0,19),
+        Size = UDim2.new(1,0,0,14),
+        BackgroundTransparency = 1,
+        Text = "",
+        TextColor3 = color,
+        TextStrokeColor3 = Color3.new(0,0,0),
+        TextStrokeTransparency = 0.1,
+        TextSize = 9,
+        Font = Enum.Font.GothamMedium
     })
 
     return {
-        highlight=highlight,
-        tag=tag,
-        part=adorneePart,
-        distanceText=distanceText
+        target = obj,
+        part = part,
+        highlight = highlight,
+        tag = tag,
+        distanceLabel = distanceLabel
     }
 end
 
-local function updateDistance(entry)
-    local r=root()
-
-    if r and entry.part and entry.part.Parent then
-        local d=(r.Position-entry.part.Position).Magnitude
-        entry.distanceText.Text=
-            tostring(math.floor(d)).." studs"
-    end
-end
-
-local function syncPlayers()
-    if not states.playerESP then
-        clearMarks(playerMarks)
+local function refreshPlayers()
+    if not enabled.playerESP then
+        clearESP(playerESP)
         return
     end
 
-    for p,entry in pairs(playerMarks) do
-        if not p.Parent
-            or not p.Character
-            or not entry.highlight.Parent
-            or entry.highlight.Adornee~=p.Character then
-
-            entry.highlight:Destroy()
-            entry.tag:Destroy()
-            playerMarks[p]=nil
+    for player,entry in pairs(playerESP) do
+        if not player.Parent
+            or not player.Character
+            or entry.target ~= player.Character
+            or not entry.part.Parent then
+            removeESP(entry)
+            playerESP[player] = nil
         end
     end
 
-    for _,p in ipairs(Players:GetPlayers()) do
-        if p~=LP and p.Character
-            and p.Character.Parent then
+    for _,player in ipairs(Players:GetPlayers()) do
+        if player ~= LP
+            and player.Character
+            and player.Character.Parent
+            and not playerESP[player] then
 
-            if not playerMarks[p] then
-                playerMarks[p]=makeESP(
-                    p.Character,
-                    p.DisplayName,
-                    C.red
-                )
-            end
+            playerESP[player] = makeESP(
+                player.Character,
+                player.DisplayName,
+                COLORS.red
+            )
         end
     end
 end
 
-local function syncItems()
-    clearMarks(itemMarks)
+local function refreshItems()
+    clearESP(itemESP)
 
-    if not states.itemESP then return end
+    if not enabled.itemESP then return end
 
-    for _,entry in ipairs(results) do
-        local obj=entry.obj
+    for _,result in ipairs(scanResults) do
+        local obj = result.obj
 
         if obj and obj.Parent then
-            local target=obj
+            local target = obj
 
             if obj:IsA("Tool") then
-                target=obj:FindFirstChild("Handle")
+                target = obj:FindFirstChild("Handle")
             end
 
             if target then
-                local esp=makeESP(
+                local entry = makeESP(
                     target,
-                    entry.name,
-                    C.green
+                    result.name,
+                    COLORS.green
                 )
 
-                if esp then
-                    table.insert(itemMarks,esp)
+                if entry then
+                    table.insert(itemESP,entry)
                 end
             end
         end
     end
 end
 
-local espElapsed=0
+local function updateESPDistances(tbl)
+    local r = root()
+    if not r then return end
 
-connect(RS.Heartbeat,function(dt)
-    espElapsed=espElapsed+dt
+    for _,entry in pairs(tbl) do
+        if entry.part and entry.part.Parent then
+            local d =
+                (r.Position-entry.part.Position).Magnitude
 
-    if espElapsed>=.5 then
-        espElapsed=0
-        syncPlayers()
-
-        for _,entry in pairs(playerMarks) do
-            updateDistance(entry)
-        end
-
-        for _,entry in pairs(itemMarks) do
-            updateDistance(entry)
+            entry.distanceLabel.Text =
+                math.floor(d).." studs"
         end
     end
-end)
+end
 
--- UNIVERSAL SCANNER
+-- ====================================
+-- ITEM SCANNER
+-- ====================================
 
-local keywords={
+local keywords = {
     "coin","gem","diamond","loot","drop",
     "chest","treasure","egg","collect",
     "pickup","reward","item","crystal",
-    "fruit","key","token","orb","gift","tool"
+    "fruit","key","token","orb","gift",
+    "ore","rock","mineral","mine","dig"
 }
 
-local function keyword(value)
-    value=string.lower(value)
+local function hasKeyword(value)
+    value = string.lower(value)
 
     for _,word in ipairs(keywords) do
         if string.find(value,word,1,true) then
@@ -752,13 +901,13 @@ local function collectible(obj)
     if obj:IsA("Tool") then return true end
 
     if not (
-        obj:IsA("Model")
-        or obj:IsA("BasePart")
+        obj:IsA("BasePart")
+        or obj:IsA("Model")
     ) then
         return false
     end
 
-    if keyword(obj.Name) then return true end
+    if hasKeyword(obj.Name) then return true end
 
     if obj:FindFirstChildWhichIsA(
         "ProximityPrompt",true
@@ -769,80 +918,71 @@ local function collectible(obj)
     for _,tag in ipairs(
         CollectionService:GetTags(obj)
     ) do
-        if keyword(tag) then return true end
+        if hasKeyword(tag) then
+            return true
+        end
     end
 
     return false
 end
 
-local function objectPosition(obj)
-    if obj:IsA("BasePart") then
-        return obj.Position
-    end
+local function scanItems()
+    table.clear(scanResults)
 
-    if obj:IsA("Model") then
-        return obj:GetPivot().Position
-    end
-
-    if obj:IsA("Tool") then
-        local handle=obj:FindFirstChild("Handle")
-        if handle then return handle.Position end
-    end
-end
-
-local function scan()
-    table.clear(results)
-
-    local r=root()
+    local r = root()
     if not r then return end
 
-    local seen={}
+    local seen = {}
 
     for _,obj in ipairs(workspace:GetDescendants()) do
-        if #results>=150 then break end
+        if #scanResults >= 150 then break end
 
         if collectible(obj) then
-            local target=obj
+            local target = obj
 
             if obj:IsA("BasePart") then
-                local model=
+                local model =
                     obj:FindFirstAncestorOfClass("Model")
 
                 if model and collectible(model) then
-                    target=model
+                    target = model
                 end
             end
 
-            local character=LP.Character
+            local ch = LP.Character
 
             if target.Parent
                 and not seen[target]
                 and not (
-                    character
-                    and target:IsDescendantOf(character)
+                    ch and target:IsDescendantOf(ch)
                 )
-                and not Players:GetPlayerFromCharacter(target) then
+                and not Players:GetPlayerFromCharacter(
+                    target
+                ) then
 
-                local p=objectPosition(target)
+                local p = getPosition(target)
 
                 if p then
-                    local d=(p-r.Position).Magnitude
+                    local d =
+                        (r.Position-p).Magnitude
 
-                    local matches=
-                        filter==""
+                    local matches =
+                        scanFilter == ""
                         or string.find(
                             string.lower(target.Name),
-                            string.lower(filter),
+                            string.lower(scanFilter),
                             1,true
                         )
 
-                    if d<=radius and matches then
-                        seen[target]=true
+                    if d <= config.scanRadius
+                        and matches then
 
-                        table.insert(results,{
-                            obj=target,
-                            name=target.Name,
-                            distance=math.floor(d)
+                        seen[target] = true
+
+                        table.insert(scanResults,{
+                            obj = target,
+                            name = target.Name,
+                            distance = math.floor(d)
                         })
                     end
                 end
@@ -850,98 +990,109 @@ local function scan()
         end
     end
 
-    table.sort(results,function(a,b)
-        return a.distance<b.distance
+    table.sort(scanResults,function(a,b)
+        return a.distance < b.distance
     end)
 end
 
+-- ====================================
 -- INSTANT PROMPT
+-- ====================================
 
 local function setInstant(on)
     if on then
-        for _,p in ipairs(workspace:GetDescendants()) do
+        for _,p in ipairs(
+            workspace:GetDescendants()
+        ) do
             if p:IsA("ProximityPrompt") then
-                if originalPrompts[p]==nil then
-                    originalPrompts[p]=p.HoldDuration
+                if originalPrompts[p] == nil then
+                    originalPrompts[p] = p.HoldDuration
                 end
-                p.HoldDuration=0
+                p.HoldDuration = 0
             end
         end
     else
-        for p,duration in pairs(originalPrompts) do
+        for p,value in pairs(originalPrompts) do
             if p.Parent then
-                p.HoldDuration=duration
+                p.HoldDuration = value
             end
         end
         table.clear(originalPrompts)
     end
 end
 
-connect(PromptService.PromptShown,function(p)
-    if states.instant then
-        if originalPrompts[p]==nil then
-            originalPrompts[p]=p.HoldDuration
-        end
-        p.HoldDuration=0
-    end
-end)
+listen(workspace.DescendantAdded,function(obj)
+    if enabled.instant
+        and obj:IsA("ProximityPrompt") then
 
-connect(workspace.DescendantAdded,function(p)
-    if states.instant and p:IsA("ProximityPrompt") then
         task.defer(function()
-            if p.Parent then
-                if originalPrompts[p]==nil then
-                    originalPrompts[p]=p.HoldDuration
+            if obj.Parent then
+                if originalPrompts[obj] == nil then
+                    originalPrompts[obj] =
+                        obj.HoldDuration
                 end
-                p.HoldDuration=0
+                obj.HoldDuration = 0
             end
         end)
     end
 end)
 
--- TRAINING TARGET LOCK
+-- ====================================
+-- TARGET LOCK - NPC / DUMMY
+-- ====================================
 
-local function targetPart(model)
+local function isNPC(model)
     if not model or not model:IsA("Model") then
-        return nil
+        return false
     end
 
     if Players:GetPlayerFromCharacter(model) then
-        return nil
+        return false
     end
 
-    return model:FindFirstChild(aimPart)
+    local h =
+        model:FindFirstChildOfClass("Humanoid")
+
+    return h ~= nil and h.Health > 0
+end
+
+local function getAimPart(model)
+    if not isNPC(model) then return nil end
+
+    return model:FindFirstChild(config.aimPart)
         or model:FindFirstChild("HumanoidRootPart")
         or model.PrimaryPart
 end
 
-local function findTrainingTarget()
-    local camera=workspace.CurrentCamera
+local function findTarget()
+    local camera = workspace.CurrentCamera
     if not camera then return nil end
 
-    local center=camera.ViewportSize/2
-    local best=nil
-    local bestDistance=aimRadius
+    local center = camera.ViewportSize/2
+    local best = nil
+    local bestDistance = config.aimFOV
 
     for _,model in ipairs(
-        CollectionService:GetTagged("FreakHubTarget")
+        workspace:GetDescendants()
     ) do
-        if model:IsDescendantOf(workspace) then
-            local part=targetPart(model)
+        if model:IsA("Model") and isNPC(model) then
+            local part = getAimPart(model)
 
             if part then
-                local screen,visible=
-                    camera:WorldToViewportPoint(part.Position)
+                local screen,visible =
+                    camera:WorldToViewportPoint(
+                        part.Position
+                    )
 
                 if visible then
-                    local d=(
+                    local d = (
                         Vector2.new(screen.X,screen.Y)
-                        -center
+                        - center
                     ).Magnitude
 
-                    if d<bestDistance then
-                        bestDistance=d
-                        best=model
+                    if d < bestDistance then
+                        bestDistance = d
+                        best = model
                     end
                 end
             end
@@ -951,124 +1102,268 @@ local function findTrainingTarget()
     return best
 end
 
-connect(RS.RenderStepped,function(dt)
-    if not states.aim then return end
+listen(RS.RenderStepped,function(dt)
+    if not enabled.targetLock then return end
 
-    local camera=workspace.CurrentCamera
+    local camera = workspace.CurrentCamera
     if not camera then return end
 
-    if not lockedTarget
-        or not lockedTarget.Parent then
-        lockedTarget=findTrainingTarget()
+    if not getAimPart(lockedTarget) then
+        lockedTarget = findTarget()
     end
 
-    local part=targetPart(lockedTarget)
+    local part = getAimPart(lockedTarget)
+    if not part then return end
 
-    if not part then
-        lockedTarget=nil
-        return
-    end
-
-    local current=camera.CFrame
-    local desired=CFrame.lookAt(
+    local current = camera.CFrame
+    local desired = CFrame.lookAt(
         current.Position,
         part.Position
     )
 
-    local alpha=1-math.pow(
-        1-math.clamp(aimSmooth,.01,1),
-        math.max(dt,0)*60
+    local smooth = math.clamp(
+        config.aimSmooth,
+        0.01,1
     )
 
-    camera.CFrame=current:Lerp(
-        desired,
-        math.clamp(alpha,0,1)
-    )
+    local alpha =
+        1-math.pow(1-smooth,dt*60)
+
+    camera.CFrame =
+        current:Lerp(desired,alpha)
 end)
 
--- FULLBRIGHT
+-- ====================================
+-- AURA HIT - BEST EFFORT
+-- ====================================
 
-local lightOld={
-    Brightness=Lighting.Brightness,
-    ClockTime=Lighting.ClockTime,
-    FogEnd=Lighting.FogEnd,
-    GlobalShadows=Lighting.GlobalShadows
-}
+local function equippedTool()
+    local ch = LP.Character
+    if not ch then return nil end
 
-local function fullbright(on)
-    if on then
-        Lighting.Brightness=3
-        Lighting.ClockTime=14
-        Lighting.FogEnd=100000
-        Lighting.GlobalShadows=false
-    else
-        for k,v in pairs(lightOld) do
-            Lighting[k]=v
+    return ch:FindFirstChildOfClass("Tool")
+end
+
+local function nearestNPC(range)
+    local best = nil
+    local bestDistance = range
+
+    for _,obj in ipairs(
+        workspace:GetDescendants()
+    ) do
+        if obj:IsA("Model") and isNPC(obj) then
+            local p = getAimPart(obj)
+
+            if p then
+                local d = distanceFrom(p.Position)
+
+                if d < bestDistance then
+                    bestDistance = d
+                    best = obj
+                end
+            end
+        end
+    end
+
+    return best
+end
+
+local function auraTick()
+    if not enabled.aura then return end
+
+    local target = nearestNPC(config.auraRadius)
+    if not target then return end
+
+    local tool = equippedTool()
+    if not tool then return end
+
+    -- Activates the equipped tool normally.
+    -- Whether a hit occurs is decided by the game.
+    pcall(function()
+        tool:Activate()
+    end)
+end
+
+-- ====================================
+-- MULTI ACTION - BEST EFFORT
+-- ====================================
+
+local function promptMatches(prompt)
+    local mode = config.actionMode
+
+    if mode == "Auto" then
+        return true
+    end
+
+    local value = string.lower(
+        prompt.Name.." "..
+        prompt.ActionText.." "..
+        prompt.ObjectText
+    )
+
+    local patterns = {
+        Collect = {
+            "collect","pickup","take","grab",
+            "claim","loot","harvest"
+        },
+        Dig = {
+            "dig","excavate","shovel"
+        },
+        Mine = {
+            "mine","mining","ore","rock",
+            "break"
+        },
+        Interact = {
+            "interact","open","use","activate"
+        }
+    }
+
+    for _,word in ipairs(patterns[mode] or {}) do
+        if string.find(value,word,1,true) then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function promptPosition(prompt)
+    local parent = prompt.Parent
+    if not parent then return nil end
+
+    if parent:IsA("BasePart") then
+        return parent.Position
+    elseif parent:IsA("Attachment") then
+        return parent.WorldPosition
+    elseif parent:IsA("Model") then
+        return parent:GetPivot().Position
+    end
+end
+
+local function multiTick()
+    if not enabled.multi then return end
+
+    local count = 0
+
+    for _,obj in ipairs(
+        workspace:GetDescendants()
+    ) do
+        if count >= 8 then break end
+
+        if obj:IsA("ProximityPrompt")
+            and obj.Enabled
+            and promptMatches(obj) then
+
+            local p = promptPosition(obj)
+
+            if p then
+                local allowedRange = math.min(
+                    config.actionRadius,
+                    obj.MaxActivationDistance
+                )
+
+                if distanceFrom(p) <= allowedRange then
+                    count = count+1
+
+                    pcall(function()
+                        obj:InputHoldBegin()
+
+                        task.delay(
+                            math.max(
+                                obj.HoldDuration,
+                                0.05
+                            ),
+                            function()
+                                if obj.Parent then
+                                    obj:InputHoldEnd()
+                                end
+                            end
+                        )
+                    end)
+                end
+            end
         end
     end
 end
 
--- MOBILE FLY CONTROLS
+-- ====================================
+-- PERIODIC TASKS
+-- ====================================
 
-local controls=new("Frame",gui,{
-    Size=UDim2.fromOffset(115,105),
-    Position=UDim2.new(1,-125,1,-165),
-    BackgroundColor3=C.bg,
-    BackgroundTransparency=.15,
-    BorderSizePixel=0,
-    Visible=false
-})
-round(controls,12)
+local espTimer = 0
+local itemTimer = 0
+local auraTimer = 0
+local actionTimer = 0
 
-local function holdButton(value,y,direction)
-    local b=new("TextButton",controls,{
-        Position=UDim2.fromOffset(8,y),
-        Size=UDim2.fromOffset(99,42),
-        BackgroundColor3=C.red,
-        BorderSizePixel=0,
-        Text=value,
-        TextColor3=C.white,
-        TextSize=13,
-        Font=Enum.Font.GothamBold
-    })
-    round(b,9)
+listen(RS.Heartbeat,function(dt)
+    espTimer = espTimer+dt
+    itemTimer = itemTimer+dt
+    auraTimer = auraTimer+dt
+    actionTimer = actionTimer+dt
 
-    connect(b.InputBegan,function(input)
-        if input.UserInputType==
-            Enum.UserInputType.Touch
-            or input.UserInputType==
-            Enum.UserInputType.MouseButton1 then
+    if espTimer >= config.espInterval then
+        espTimer = 0
 
-            vertical=direction
+        if enabled.playerESP
+            and enabled.playerRefresh then
+            refreshPlayers()
         end
-    end)
 
-    connect(b.InputEnded,function(input)
-        if input.UserInputType==
-            Enum.UserInputType.Touch
-            or input.UserInputType==
-            Enum.UserInputType.MouseButton1 then
+        updateESPDistances(playerESP)
+        updateESPDistances(itemESP)
+    end
 
-            if vertical==direction then
-                vertical=0
-            end
+    if itemTimer >= 4 then
+        itemTimer = 0
+
+        if enabled.itemESP
+            and enabled.itemRefresh then
+            scanItems()
+            refreshItems()
         end
-    end)
+    end
+
+    if auraTimer >= config.auraInterval then
+        auraTimer = 0
+        auraTick()
+    end
+
+    if actionTimer >= config.actionInterval then
+        actionTimer = 0
+        multiTick()
+    end
+end)
+
+-- ====================================
+-- FULLBRIGHT
+-- ====================================
+
+local function setFullbright(on)
+    if on then
+        Lighting.Brightness = 3
+        Lighting.ClockTime = 14
+        Lighting.FogEnd = 100000
+        Lighting.GlobalShadows = false
+    else
+        for k,v in pairs(originalLighting) do
+            Lighting[k] = v
+        end
+    end
 end
 
-holdButton("▲ UP",7,1)
-holdButton("▼ DOWN",55,-1)
-
+-- ====================================
 -- PAGES
+-- ====================================
 
-local pages={}
+local pages = {}
 local switch
 
-pages.Home=function()
+pages.Home = function()
     heading("Dashboard")
-    info("FREAKHUB UNIVERSAL v1.9")
+
+    info("FREAKHUB UNIVERSAL v2.0")
     info("Player: "..LP.Name)
-    info("Compact UI • ESP Names • Training Aim")
+    info("Compact UI • Flight • ESP • Automation")
 
     button("PLAYER SETTINGS",function()
         switch("Player")
@@ -1078,149 +1373,214 @@ pages.Home=function()
         switch("ESP")
     end)
 
-    button("TARGET LOCK",function()
-        switch("Aim")
+    button("AUTOMATION",function()
+        switch("Automation")
     end)
 end
 
-pages.Player=function()
+pages.Player = function()
     heading("Player")
 
-    toggle("Infinite Jump","infinite")
+    toggle("Infinite Jump","infiniteJump")
 
     toggle("Noclip","noclip",function(on)
-        if not on then restoreNoclip() end
+        if not on then
+            restoreCollision()
+        end
     end)
 
-    numberRow("Walk Speed",speed,function(v)
-        speed=math.clamp(v or 16,16,200)
-        applyPlayer()
-    end)
+    toggle("Infinite Health","health")
 
-    numberRow("Jump Power",jump,function(v)
-        jump=math.clamp(v or 50,50,200)
-        applyPlayer()
-    end)
+    numberRow(
+        "Walk Speed",
+        config.walkSpeed,
+        function(v)
+            config.walkSpeed =
+                math.clamp(v or 16,16,200)
+            applyPlayer()
+        end
+    )
+
+    numberRow(
+        "Jump Power",
+        config.jumpPower,
+        function(v)
+            config.jumpPower =
+                math.clamp(v or 50,50,200)
+            applyPlayer()
+        end
+    )
 
     heading("Flight")
 
     toggle("Fly","fly",function(on)
         setFly(on)
-        controls.Visible=states.fly or states.mountFly
+        flightControls.Visible =
+            enabled.fly or enabled.mountFly
+        switch("Player")
     end)
 
-    numberRow("Fly Speed",flySpeed,function(v)
-        flySpeed=math.clamp(v or 55,10,200)
-    end)
+    numberRow(
+        "Fly Speed",
+        config.flySpeed,
+        function(v)
+            config.flySpeed =
+                math.clamp(v or 55,10,200)
+        end
+    )
 
     toggle("Mount Fly","mountFly",function(on)
         setMountFly(on)
-        controls.Visible=states.fly or states.mountFly
+        flightControls.Visible =
+            enabled.fly or enabled.mountFly
         switch("Player")
     end)
 
-    numberRow("Mount Speed",mountSpeed,function(v)
-        mountSpeed=math.clamp(v or 65,10,200)
-    end)
+    numberRow(
+        "Mount Speed",
+        config.mountSpeed,
+        function(v)
+            config.mountSpeed =
+                math.clamp(v or 65,10,200)
+        end
+    )
 
-    button("STOP ALL FLIGHT",function()
-        states.fly=false
-        states.mountFly=false
+    button("STOP FLIGHT",function()
+        enabled.fly = false
+        enabled.mountFly = false
         stopFly()
-        controls.Visible=false
+        flightControls.Visible = false
         switch("Player")
     end)
+
+    info("Flight: UP / DOWN / FORWARD / BACK.")
 end
 
-pages.ESP=function()
+pages.ESP = function()
     heading("ESP Center")
 
-    toggle("Player ESP","playerESP",syncPlayers)
-    toggle("Item ESP","itemESP",syncItems)
+    toggle("Player ESP","playerESP",function()
+        refreshPlayers()
+    end)
 
-    button("REFRESH PLAYER ESP",syncPlayers)
-    button("REFRESH ITEM ESP",syncItems)
+    toggle("Player Auto Refresh","playerRefresh")
+
+    toggle("Item ESP","itemESP",function()
+        if enabled.itemESP
+            and #scanResults == 0 then
+            scanItems()
+        end
+        refreshItems()
+    end)
+
+    toggle("Item Auto Refresh","itemRefresh")
+
+    numberRow(
+        "Refresh (sec)",
+        config.espInterval,
+        function(v)
+            config.espInterval =
+                math.clamp(v or 1.5,0.5,10)
+        end
+    )
+
+    button("REFRESH PLAYER ESP",refreshPlayers)
+
+    button("REFRESH ITEM ESP",function()
+        scanItems()
+        refreshItems()
+    end)
 
     button("CLEAR ALL ESP",function()
-        states.playerESP=false
-        states.itemESP=false
-        clearMarks(playerMarks)
-        clearMarks(itemMarks)
+        enabled.playerESP = false
+        enabled.itemESP = false
+
+        clearESP(playerESP)
+        clearESP(itemESP)
+
         switch("ESP")
     end)
 
-    info("Name Tag: 11px • Distance: 9px")
+    info("Name: 10px • Distance: 9px")
 end
 
-pages.Scanner=function()
+pages.Scanner = function()
     heading("Universal Scanner")
 
-    numberRow("Scan Radius",radius,function(v)
-        radius=math.clamp(v or 150,25,500)
-    end)
+    numberRow(
+        "Scan Radius",
+        config.scanRadius,
+        function(v)
+            config.scanRadius =
+                math.clamp(v or 150,25,500)
+        end
+    )
 
-    local f=row("Name Filter")
+    local f = row("Name Filter")
 
-    local box=new("TextBox",f,{
-        Position=UDim2.new(.44,0,0,5),
-        Size=UDim2.new(.53,0,0,25),
-        BackgroundColor3=C.panel,
-        BorderSizePixel=0,
-        Text=filter,
-        PlaceholderText="All items",
-        PlaceholderColor3=C.muted,
-        TextColor3=C.white,
-        TextSize=10,
-        ClearTextOnFocus=false
+    local input = create("TextBox",f,{
+        Position = UDim2.new(0.44,0,0,5),
+        Size = UDim2.new(0.53,0,0,25),
+        BackgroundColor3 = COLORS.panel,
+        BorderSizePixel = 0,
+        Text = scanFilter,
+        PlaceholderText = "All items",
+        PlaceholderColor3 = COLORS.muted,
+        TextColor3 = COLORS.white,
+        TextSize = 10,
+        ClearTextOnFocus = false
     })
-    round(box,6)
+    corner(input,6)
 
     button("SCAN NOW",function()
-        filter=box.Text
-        scan()
-        syncItems()
+        scanFilter = input.Text
+        scanItems()
+        refreshItems()
         switch("Results")
     end)
 
     toggle("Instant Prompt","instant",setInstant)
 
-    info("Scanner mencari kandidat item pada client.")
+    info("Deteksi berdasarkan nama, tag, dan prompt.")
 end
 
-pages.Results=function()
+pages.Results = function()
     heading("Scan Results")
-    info("Found: "..#results.." candidates")
+
+    info("Found: "..#scanResults.." candidates")
 
     button("SCAN AGAIN",function()
-        scan()
-        syncItems()
+        scanItems()
+        refreshItems()
         switch("Results")
     end)
 
-    for i,entry in ipairs(results) do
-        if i>45 then break end
+    for index,result in ipairs(scanResults) do
+        if index > 45 then break end
 
         button(
-            entry.name.." • "..entry.distance.." studs",
+            result.name.." • "..
+            result.distance.." studs",
             function()
-                local obj=entry.obj
+                local obj = result.obj
 
                 if obj and obj.Parent then
-                    local target=obj
+                    local target = obj
 
                     if obj:IsA("Tool") then
-                        target=obj:FindFirstChild("Handle")
+                        target =
+                            obj:FindFirstChild("Handle")
                     end
 
                     if target then
-                        local esp=makeESP(
+                        local entry = makeESP(
                             target,
-                            entry.name,
-                            C.green
+                            result.name,
+                            COLORS.green
                         )
 
-                        if esp then
-                            table.insert(itemMarks,esp)
+                        if entry then
+                            table.insert(itemESP,entry)
                         end
                     end
                 end
@@ -1229,123 +1589,219 @@ pages.Results=function()
     end
 end
 
-pages.Aim=function()
-    heading("Training Target Lock")
+pages.Aim = function()
+    heading("NPC Target Lock")
 
-    toggle("Target Lock","aim",function(on)
+    toggle("Target Lock","targetLock",function(on)
         if on then
-            lockedTarget=findTrainingTarget()
+            lockedTarget = findTarget()
 
             if not lockedTarget then
-                states.aim=false
+                enabled.targetLock = false
             end
         else
-            lockedTarget=nil
+            lockedTarget = nil
         end
 
         switch("Aim")
     end)
 
-    numberRow("FOV Radius",aimRadius,function(v)
-        aimRadius=math.clamp(v or 160,40,500)
-    end)
+    numberRow(
+        "FOV Radius",
+        config.aimFOV,
+        function(v)
+            config.aimFOV =
+                math.clamp(v or 180,40,500)
+        end
+    )
 
-    numberRow("Smooth %",aimSmooth*100,function(v)
-        aimSmooth=math.clamp(
-            (v or 16)/100,
-            .01,1
-        )
-    end)
+    numberRow(
+        "Smooth %",
+        config.aimSmooth*100,
+        function(v)
+            config.aimSmooth =
+                math.clamp((v or 15)/100,0.01,1)
+        end
+    )
 
-    button("TARGET PART: "..aimPart,function()
-        aimPart=aimPart=="Head"
-            and "HumanoidRootPart"
-            or "Head"
+    button(
+        "TARGET: "..config.aimPart,
+        function()
+            config.aimPart =
+                config.aimPart == "Head"
+                and "HumanoidRootPart"
+                or "Head"
 
-        lockedTarget=nil
-        switch("Aim")
-    end)
+            lockedTarget = nil
+            switch("Aim")
+        end
+    )
 
-    button("FIND NEAREST TRAINING TARGET",function()
-        lockedTarget=findTrainingTarget()
+    button("FIND NEAREST NPC",function()
+        lockedTarget = findTarget()
     end)
 
     button("UNLOCK TARGET",function()
-        lockedTarget=nil
-        states.aim=false
+        enabled.targetLock = false
+        lockedTarget = nil
         switch("Aim")
     end)
 
-    info("Requires dummy tagged FreakHubTarget.")
+    info("Target Lock hanya untuk NPC/dummy.")
 end
 
-pages.Teleport=function()
+pages.Automation = function()
+    heading("Automation")
+
+    toggle("Aura Hit","aura")
+
+    numberRow(
+        "Aura Radius",
+        config.auraRadius,
+        function(v)
+            config.auraRadius =
+                math.clamp(v or 12,5,40)
+        end
+    )
+
+    numberRow(
+        "Aura Delay",
+        config.auraInterval,
+        function(v)
+            config.auraInterval =
+                math.clamp(v or 0.5,0.2,5)
+        end
+    )
+
+    heading("Multi Action")
+
+    toggle("Multi Action","multi")
+
+    button(
+        "MODE: "..config.actionMode,
+        function()
+            local modes = {
+                "Auto",
+                "Collect",
+                "Dig",
+                "Mine",
+                "Interact"
+            }
+
+            for i,mode in ipairs(modes) do
+                if mode == config.actionMode then
+                    config.actionMode =
+                        modes[i % #modes + 1]
+                    break
+                end
+            end
+
+            switch("Automation")
+        end
+    )
+
+    numberRow(
+        "Action Radius",
+        config.actionRadius,
+        function(v)
+            config.actionRadius =
+                math.clamp(v or 15,3,50)
+        end
+    )
+
+    numberRow(
+        "Action Delay",
+        config.actionInterval,
+        function(v)
+            config.actionInterval =
+                math.clamp(v or 1,0.5,10)
+        end
+    )
+
+    button("STOP AUTOMATION",function()
+        enabled.aura = false
+        enabled.multi = false
+        switch("Automation")
+    end)
+
+    info(
+        "Best effort: aksi hanya berhasil jika "..
+        "mekanisme game mengizinkannya."
+    )
+end
+
+pages.Teleport = function()
     heading("Teleport Slots")
 
     for i=1,5 do
-        local index=i
-        local f=row("Slot "..index)
+        local index = i
+        local frame = row("Slot "..index)
 
-        local save=new("TextButton",f,{
-            Position=UDim2.new(1,-102,0,5),
-            Size=UDim2.fromOffset(46,25),
-            BackgroundColor3=C.red,
-            BorderSizePixel=0,
-            Text="SAVE",
-            TextColor3=C.white,
-            TextSize=10
+        local save = create("TextButton",frame,{
+            Position = UDim2.new(1,-102,0,5),
+            Size = UDim2.fromOffset(46,25),
+            BackgroundColor3 = COLORS.red,
+            BorderSizePixel = 0,
+            Text = "SAVE",
+            TextColor3 = COLORS.white,
+            TextSize = 10
         })
-        round(save,6)
+        corner(save,6)
 
-        local go=new("TextButton",f,{
-            Position=UDim2.new(1,-52,0,5),
-            Size=UDim2.fromOffset(45,25),
-            BackgroundColor3=C.panel,
-            BorderSizePixel=0,
-            Text="GO",
-            TextColor3=C.white,
-            TextSize=10
+        local go = create("TextButton",frame,{
+            Position = UDim2.new(1,-52,0,5),
+            Size = UDim2.fromOffset(45,25),
+            BackgroundColor3 = COLORS.panel,
+            BorderSizePixel = 0,
+            Text = "GO",
+            TextColor3 = COLORS.white,
+            TextSize = 10
         })
-        round(go,6)
+        corner(go,6)
 
-        connect(save.Activated,function()
-            local r=root()
+        listen(save.Activated,function()
+            local r = root()
             if r then
-                slots[index]=r.CFrame
+                teleportSlots[index] = r.CFrame
             end
         end)
 
-        connect(go.Activated,function()
-            if slots[index] and LP.Character then
-                LP.Character:PivotTo(slots[index])
+        listen(go.Activated,function()
+            local saved = teleportSlots[index]
+
+            if saved and LP.Character then
+                LP.Character:PivotTo(saved)
             end
         end)
     end
 
     button("CLEAR ALL SLOTS",function()
-        table.clear(slots)
+        table.clear(teleportSlots)
     end)
 end
 
-pages.Utility=function()
+pages.Utility = function()
     heading("Utility")
 
-    toggle("Fullbright","fullbright",fullbright)
+    toggle("Fullbright","fullbright",setFullbright)
 
     button("RESET LOGO POSITION",function()
-        logo.Position=UDim2.new(0,14,.45,0)
+        logo.Position =
+            UDim2.new(0,14,0.45,0)
     end)
 
     button("HIDE MENU",function()
-        window.Visible=false
+        window.Visible = false
     end)
 
-    info("Drag F to move. Tap F to open menu.")
+    info("Drag tombol F. Tap untuk buka/tutup.")
 end
 
--- SIDEBAR
+-- ====================================
+-- SIDEBAR NAVIGATION
+-- ====================================
 
-local tabs={}
+local tabs = {}
 
 for i,name in ipairs({
     "Home",
@@ -1354,78 +1810,87 @@ for i,name in ipairs({
     "Scanner",
     "Results",
     "Aim",
+    "Automation",
     "Teleport",
     "Utility"
 }) do
-    local b=new("TextButton",sidebar,{
-        Size=UDim2.new(1,0,0,36),
-        BackgroundColor3=C.card,
-        BorderSizePixel=0,
-        Text=name,
-        TextColor3=C.white,
-        TextSize=11,
-        Font=Enum.Font.GothamMedium,
-        LayoutOrder=i
+    local b = create("TextButton",sidebar,{
+        Size = UDim2.new(1,0,0,36),
+        BackgroundColor3 = COLORS.card,
+        BorderSizePixel = 0,
+        Text = name,
+        TextColor3 = COLORS.white,
+        TextSize = 11,
+        Font = Enum.Font.GothamMedium,
+        LayoutOrder = i
     })
+    corner(b,8)
 
-    round(b,8)
-    tabs[name]=b
+    tabs[name] = b
 
-    connect(b.Activated,function()
+    listen(b.Activated,function()
         switch(name)
     end)
 end
 
-switch=function(name)
-    wipe()
+switch = function(name)
+    selectedTab = name
+    clearBody()
+
     pages[name]()
 
-    for n,b in pairs(tabs) do
-        b.BackgroundColor3=
-            n==name and C.red or C.card
+    for tab,b in pairs(tabs) do
+        b.BackgroundColor3 =
+            tab == name
+            and COLORS.red
+            or COLORS.card
     end
 end
 
--- DRAG LOGO AND WINDOW
+-- ====================================
+-- MOBILE DRAG
+-- ====================================
 
 local function draggable(handle,target,tap)
-    local active,start,origin,moved=
-        nil,nil,nil,false
+    local active = nil
+    local start = nil
+    local origin = nil
+    local moved = false
 
-    connect(handle.InputBegan,function(input)
-        if input.UserInputType==
+    listen(handle.InputBegan,function(input)
+        if input.UserInputType ==
             Enum.UserInputType.Touch
-            or input.UserInputType==
+            or input.UserInputType ==
             Enum.UserInputType.MouseButton1 then
 
-            active=input
-            start=input.Position
-            origin=target.Position
-            moved=false
+            active = input
+            start = input.Position
+            origin = target.Position
+            moved = false
         end
     end)
 
-    connect(UIS.InputChanged,function(input)
+    listen(UIS.InputChanged,function(input)
         if not active then return end
 
-        local mouse=
-            active.UserInputType==
+        local mouse =
+            active.UserInputType ==
                 Enum.UserInputType.MouseButton1
-            and input.UserInputType==
+            and input.UserInputType ==
                 Enum.UserInputType.MouseMovement
 
-        if input~=active and not mouse then
+        if input ~= active and not mouse then
             return
         end
 
-        local delta=input.Position-start
+        local delta = input.Position-start
 
-        if delta.Magnitude>8 then
-            moved=true
+        if delta.Magnitude > 8 then
+            moved = true
         end
 
         if moved then
-            target.Position=UDim2.new(
+            target.Position = UDim2.new(
                 origin.X.Scale,
                 origin.X.Offset+delta.X,
                 origin.Y.Scale,
@@ -1434,10 +1899,10 @@ local function draggable(handle,target,tap)
         end
     end)
 
-    connect(UIS.InputEnded,function(input)
-        if input~=active then return end
+    listen(UIS.InputEnded,function(input)
+        if input ~= active then return end
 
-        active=nil
+        active = nil
 
         if not moved and tap then
             tap()
@@ -1446,52 +1911,57 @@ local function draggable(handle,target,tap)
 end
 
 draggable(logo,logo,function()
-    window.Visible=not window.Visible
+    window.Visible = not window.Visible
 end)
 
 draggable(header,window)
 
-connect(close.Activated,function()
-    window.Visible=false
+listen(close.Activated,function()
+    window.Visible = false
 end)
 
-local function fit()
-    local camera=workspace.CurrentCamera
+local function fitWindow()
+    local camera = workspace.CurrentCamera
     if not camera then return end
 
-    local v=camera.ViewportSize
+    local v = camera.ViewportSize
 
-    window.Size=UDim2.fromOffset(
+    window.Size = UDim2.fromOffset(
         math.min(390,math.max(220,v.X-12)),
         math.min(400,math.max(240,v.Y-28))
     )
 end
 
-fit()
+fitWindow()
 
 if workspace.CurrentCamera then
-    connect(
+    listen(
         workspace.CurrentCamera:
             GetPropertyChangedSignal("ViewportSize"),
-        fit
+        fitWindow
     )
 end
 
+-- ====================================
 -- CLEANUP
+-- ====================================
 
-connect(gui.Destroying,function()
-    alive=false
-    states.aim=false
-    lockedTarget=nil
+listen(gui.Destroying,function()
+    alive = false
+
+    for key in pairs(enabled) do
+        enabled[key] = false
+    end
+
+    lockedTarget = nil
 
     stopFly()
-    restoreNoclip()
-
-    clearMarks(playerMarks)
-    clearMarks(itemMarks)
+    restoreCollision()
+    clearESP(playerESP)
+    clearESP(itemESP)
 
     setInstant(false)
-    fullbright(false)
+    setFullbright(false)
 
     for _,connection in ipairs(connections) do
         connection:Disconnect()
@@ -1500,4 +1970,4 @@ end)
 
 switch("Home")
 
-print("FREAKHUB v1.9 UNIVERSAL LOADED")
+print("FREAKHUB v2.0 BEST EFFORT LOADED")
