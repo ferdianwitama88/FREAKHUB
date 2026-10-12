@@ -1970,4 +1970,127 @@ end)
 
 switch("Home")
 
-print("FREAKHUB v2.0 BEST EFFORT LOADED")
+-- ==========================================
+-- FREAKHUB v2.1 - MOBILE UI PATCH
+-- ==========================================
+
+local uiSizeModes = {
+    Small = {
+        scale = 0.92,
+        font = 1.0
+    },
+    Normal = {
+        scale = 1.0,
+        font = 1.16
+    },
+    Large = {
+        scale = 1.08,
+        font = 1.32
+    }
+}
+
+local selectedUISize = "Normal"
+
+local baseTextSizes = setmetatable({}, {
+    __mode = "k"
+})
+
+local function trackUIObject(obj)
+    if obj:IsA("TextLabel")
+        or obj:IsA("TextButton")
+        or obj:IsA("TextBox") then
+
+        if baseTextSizes[obj] == nil then
+            baseTextSizes[obj] = obj.TextSize
+        end
+    end
+end
+
+local function applyUISize(mode)
+    local setting = uiSizeModes[mode]
+    if not setting then return end
+
+    selectedUISize = mode
+
+    for _,obj in ipairs(gui:GetDescendants()) do
+        trackUIObject(obj)
+
+        local original = baseTextSizes[obj]
+
+        if original then
+            obj.TextSize = math.max(
+                11,
+                math.floor(
+                    original * setting.font + 0.5
+                )
+            )
+        end
+    end
+
+    local camera = workspace.CurrentCamera
+
+    local viewport = camera
+        and camera.ViewportSize
+        or Vector2.new(400,600)
+
+    window.Size = UDim2.fromOffset(
+        math.min(
+            math.floor(390 * setting.scale),
+            math.max(220,viewport.X - 12)
+        ),
+        math.min(
+            math.floor(400 * setting.scale),
+            math.max(240,viewport.Y - 28)
+        )
+    )
+end
+
+-- ==========================================
+-- UTILITY MENU - UI SIZE
+-- ==========================================
+
+local oldUtilityPage = pages.Utility
+
+pages.Utility = function()
+    oldUtilityPage()
+
+    heading("Display Size")
+
+    info(
+        "Adjust font size for mobile readability."
+    )
+
+    button(
+        "UI SIZE: "..selectedUISize,
+        function()
+
+            local nextMode = ({
+                Small = "Normal",
+                Normal = "Large",
+                Large = "Small"
+            })[selectedUISize]
+
+            applyUISize(nextMode)
+
+            switch("Utility")
+
+            applyUISize(nextMode)
+        end
+    )
+end
+
+-- ==========================================
+-- AUTO APPLY AFTER TAB CHANGE
+-- ==========================================
+
+local originalSwitch = switch
+
+switch = function(name)
+    originalSwitch(name)
+    applyUISize(selectedUISize)
+end
+
+-- Default: Normal
+switch(selectedTab)
+
+print("FREAKHUB v2.1 UI PATCH LOADED")
