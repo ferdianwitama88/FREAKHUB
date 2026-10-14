@@ -1,6 +1,6 @@
 
 --[[
-    FREAKHUB v2.3.1
+    FREAKHUB v2.4
     FULL INTEGRATED - MOBILE EDITION
 
     Tabs:
@@ -121,6 +121,7 @@ local state = {
     autoClick = false,
     burstClick = false,
     keepButton = false,
+    floatingClick = false,
     swingToggle = false
 }
 
@@ -143,6 +144,110 @@ local clickMode = "Idle"
 local clickStatus = "Ready"
 local clickSuccess = 0
 local screenBlocked = true
+
+-- Persistent configuration (executor file APIs are optional).
+local HttpService = game:GetService("HttpService")
+local configFile = "FREAKHUB_" .. tostring(game.PlaceId) .. ".json"
+local saveConfig
+local loadConfig
+local configStatus = "Not loaded"
+
+local function serializeCFrame(cf)
+    if typeof(cf) ~= "CFrame" then return nil end
+    return {cf:GetComponents()}
+end
+
+local function deserializeCFrame(values)
+    if type(values) ~= "table" or #values ~= 12 then return nil end
+    for _, value in ipairs(values) do
+        if type(value) ~= "number" then return nil end
+    end
+    local ok, cf = pcall(function()
+        return CFrame.new(table.unpack(values))
+    end)
+    return ok and cf or nil
+end
+
+saveConfig = function()
+    if type(writefile) ~= "function" then
+        configStatus = "File saving unavailable in executor"
+        return false
+    end
+    local slots = {}
+    for i = 1, 5 do
+        slots[tostring(i)] = serializeCFrame(teleportSlots[i])
+    end
+    local data = {
+        version = 1,
+        walkSpeed = cfg.walkSpeed,
+        jumpPower = cfg.jumpPower,
+        flySpeed = cfg.flySpeed,
+        mountSpeed = cfg.mountSpeed,
+        scanRadius = cfg.scanRadius,
+        refreshTime = cfg.refreshTime,
+        clickMethod = cfg.clickMethod,
+        clickDelay = cfg.clickDelay,
+        burstCount = cfg.burstCount,
+        burstGap = cfg.burstGap,
+        swingSpeed = cfg.swingSpeed,
+        auraRadius = cfg.auraRadius,
+        auraDelay = cfg.auraDelay,
+        actionRadius = cfg.actionRadius,
+        actionDelay = cfg.actionDelay,
+        actionMode = cfg.actionMode,
+        uiSize = cfg.uiSize,
+        teleportSlots = slots
+    }
+    local ok = pcall(function()
+        writefile(configFile, HttpService:JSONEncode(data))
+    end)
+    configStatus = ok and "Saved" or "Save failed"
+    return ok
+end
+
+loadConfig = function()
+    if type(readfile) ~= "function" then
+        configStatus = "File loading unavailable in executor"
+        return false
+    end
+    local ok, data = pcall(function()
+        return HttpService:JSONDecode(readfile(configFile))
+    end)
+    if not ok or type(data) ~= "table" then
+        configStatus = "No saved config"
+        return false
+    end
+    local numeric = {
+        walkSpeed={16,200}, jumpPower={50,200},
+        flySpeed={10,200}, mountSpeed={10,200},
+        scanRadius={25,500}, refreshTime={0.5,10},
+        clickDelay={100,60000}, burstCount={1,15},
+        burstGap={300,60000}, swingSpeed={0.5,10},
+        auraRadius={5,40}, auraDelay={0.2,5},
+        actionRadius={3,50}, actionDelay={0.5,10}
+    }
+    for key, bounds in pairs(numeric) do
+        if type(data[key]) == "number" then
+            cfg[key] = math.clamp(data[key], bounds[1], bounds[2])
+        end
+    end
+    local options = {
+        clickMethod={Tool=true,Hybrid=true,Screen=true},
+        actionMode={Auto=true,Collect=true,Dig=true,Mine=true,Interact=true},
+        uiSize={Small=true,Normal=true,Large=true}
+    }
+    for key, choices in pairs(options) do
+        if choices[data[key]] then cfg[key] = data[key] end
+    end
+    if type(data.teleportSlots) == "table" then
+        for i = 1, 5 do
+            teleportSlots[i] = deserializeCFrame(data.teleportSlots[tostring(i)])
+        end
+    end
+    configStatus = "Loaded"
+    return true
+end
+loadConfig()
 
 local selectedTab = "Home"
 
@@ -232,39 +337,29 @@ local gui = create("ScreenGui", PG, {
     DisplayOrder = 500
 })
 
+-- Stylized F emblem built from Roblox GUI elements
 local logo = create("TextButton", gui, {
-    Size = UDim2.fromOffset(54, 54),
+    Size = UDim2.fromOffset(56, 56),
     Position = UDim2.new(0, 14, 0.45, 0),
-    BackgroundColor3 = C.bg,
+    BackgroundColor3 = Color3.fromRGB(12, 12, 20),
     BorderSizePixel = 0,
-    Text = "F",
-    TextSize = 33,
-    TextColor3 = C.red,
-    Font = Enum.Font.GothamBlack,
-    Active = true
+    Text = "",
+    Active = true,
+    AutoButtonColor = false
 })
 corner(logo, 13)
-
-create("UIGradient", logo, {
-    Rotation = 135,
-    Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(32, 35, 49)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(9, 10, 16))
+create("UIStroke", logo, {Color = C.red, Thickness = 2})
+local function fBar(pos, size, rotation)
+    local bar = create("Frame", logo, {
+        Position = pos, Size = size, Rotation = rotation,
+        BackgroundColor3 = C.red, BorderSizePixel = 0
     })
-})
-
-local logoAccent = create("Frame", logo, {
-    Size = UDim2.fromOffset(21, 3),
-    Position = UDim2.new(0.5, -10, 1, -7),
-    BorderSizePixel = 0,
-    BackgroundColor3 = C.red
-})
-corner(logoAccent, 2)
-
-create("UIStroke", logo, {
-    Color = C.red,
-    Thickness = 2
-})
+    corner(bar, 2)
+end
+fBar(UDim2.fromOffset(20, 12), UDim2.fromOffset(8, 37), 17)
+fBar(UDim2.fromOffset(15, 13), UDim2.fromOffset(32, 8), -13)
+fBar(UDim2.fromOffset(17, 28), UDim2.fromOffset(24, 7), -13)
+fBar(UDim2.fromOffset(13, 43), UDim2.fromOffset(19, 3), -30)
 
 local window = create("Frame", gui, {
     Size = UDim2.fromOffset(390, 410),
@@ -300,26 +395,22 @@ local function textLabel(parent, text, size, color)
     })
 end
 
-local title = textLabel(header, "FREAKHUB", 20)
+local title = textLabel(header, "FREAK", 20, C.white)
 title.Position = UDim2.fromOffset(14, 3)
+title.Size = UDim2.fromOffset(78, 24)
 title.Font = Enum.Font.GothamBlack
-
-title.TextColor3 = C.white
-
+local titleHub = textLabel(header, "HUB", 20, C.red)
+titleHub.Position = UDim2.fromOffset(92, 3)
+titleHub.Size = UDim2.fromOffset(60, 24)
+titleHub.Font = Enum.Font.GothamBlack
 local brandAccent = create("Frame", header, {
-    Position = UDim2.fromOffset(15, 27),
-    Size = UDim2.fromOffset(77, 2),
+    Position = UDim2.fromOffset(15, 28),
+    Size = UDim2.fromOffset(135, 2),
     BorderSizePixel = 0,
     BackgroundColor3 = C.red
 })
-
-local subtitle = textLabel(
-    header,
-    "UNIVERSAL  •  v2.3.1",
-    11,
-    C.red
-)
-subtitle.Position = UDim2.fromOffset(15, 32)
+local subtitle = textLabel(header, "UNIVERSAL  •  v2.4", 10, C.muted)
+subtitle.Position = UDim2.fromOffset(15, 33)
 
 local close = create("TextButton", header, {
     Position = UDim2.new(1, -41, 0, 11),
@@ -672,6 +763,36 @@ local function emergencyStop()
     cfg.swingEnabled = false
     clickStatus = "EMERGENCY STOP"
 end
+
+-- Floating start/stop button: uses current Auto/Burst selection.
+local floatingClickButton = create("TextButton", gui, {
+    Size = UDim2.fromOffset(122, 45),
+    Position = UDim2.new(1, -138, 1, -340),
+    BackgroundColor3 = C.green,
+    BorderSizePixel = 0,
+    Text = "START CLICK",
+    TextSize = 12,
+    TextColor3 = C.bg,
+    Font = Enum.Font.GothamBold,
+    Visible = false,
+    Active = true
+})
+corner(floatingClickButton, 10)
+
+local floatingMode = "Auto"
+local function refreshFloatingClick()
+    local running = clickMode == "Auto" or clickMode == "Burst"
+    floatingClickButton.Text = running and "STOP CLICK" or ("START " .. string.upper(floatingMode))
+    floatingClickButton.BackgroundColor3 = running and C.red or C.green
+end
+connect(floatingClickButton.Activated, function()
+    if clickMode == "Auto" or clickMode == "Burst" then
+        stopClicker()
+    else
+        startClicker(floatingMode)
+    end
+    refreshFloatingClick()
+end)
 
 -- =========================================
 -- KEEP CLICK MOBILE BUTTON
@@ -1607,7 +1728,7 @@ local switch
 pages.Home = function()
     heading("Dashboard")
 
-    info("FREAKHUB v2.3.1 | Universal Stable Edition")
+    info("FREAKHUB v2.4 | Config + Floating Controls")
 
     info("Player: " .. LP.Name)
 
@@ -1903,6 +2024,16 @@ pages.Automation = function()
     )
 
     heading("Auto Clicker")
+    info("Enable FLOATING CLICK CONTROL, choose Auto/Burst, then press START outside the menu.")
+    button("FLOAT MODE: " .. floatingMode, function()
+        floatingMode = floatingMode == "Auto" and "Burst" or "Auto"
+        refreshFloatingClick()
+        switch("Automation")
+    end)
+    toggle("Floating Click Control", "floatingClick", function(on)
+        floatingClickButton.Visible = on
+        if not on then stopClicker() end
+    end)
     info("Status: " .. clickStatus .. " | Minimum delay: 100 ms")
 
     button(
@@ -2113,6 +2244,7 @@ end
 
 pages.Teleport = function()
     heading("Teleport Slots")
+    info("Slots saved for this game when executor supports file access.")
 
     for i = 1, 5 do
         local index = i
@@ -2145,6 +2277,7 @@ pages.Teleport = function()
 
             if r then
                 teleportSlots[index] = r.CFrame
+                saveConfig()
             end
         end)
 
@@ -2161,6 +2294,7 @@ pages.Teleport = function()
 
     button("CLEAR ALL SLOTS", function()
         table.clear(teleportSlots)
+        saveConfig()
     end)
 end
 
@@ -2170,6 +2304,16 @@ end
 
 pages.Utility = function()
     heading("Utility")
+    info("Config: " .. configStatus)
+    button("SAVE CONFIG", function()
+        saveConfig()
+        switch("Utility")
+    end)
+    button("LOAD CONFIG", function()
+        loadConfig()
+        applyMovement()
+        switch("Utility")
+    end)
 
     toggle(
         "Fullbright",
@@ -2341,6 +2485,7 @@ local function cleanup()
     active = false
 
     stopClicker()
+    saveConfig()
     stopFly()
 
     restoreCollision()
@@ -2373,4 +2518,4 @@ connect(gui.Destroying, cleanup)
 
 switch("Home")
 
-print("FREAKHUB v2.3.1 UNIVERSAL STABLE LOADED")
+print("FREAKHUB v2.4 CONFIG + FLOATING CONTROL LOADED")
