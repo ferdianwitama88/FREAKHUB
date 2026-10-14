@@ -456,7 +456,7 @@ local brandAccent = create("Frame", header, {
     BorderSizePixel = 0,
     BackgroundColor3 = C.red
 })
-local subtitle = textLabel(header, "UNIVERSAL  •  v3.0", 12, C.muted)
+local subtitle = textLabel(header, "UNIVERSAL  •  v3.2", 12, C.muted)
 subtitle.Position = UDim2.fromOffset(22, 33)
 
 local close = create("TextButton", header, {
@@ -549,13 +549,21 @@ local function applyUISize()
         })[cfg.uiSize] or 1
 
         window.Size = UDim2.fromOffset(
-            math.max(255, math.min(470 * scale, viewport.X - 12)),
-            math.max(270, math.min(470 * scale, viewport.Y - 20))
+            math.max(255, math.min(900 * scale, viewport.X * 0.90)),
+            math.max(270, math.min(510 * scale, viewport.Y - 20))
         )
     end
 end
 
+local currentPair = nil
+local pairCount = 0
+local function resetPair()
+    currentPair = nil
+    pairCount = 0
+end
+
 local function clearBody()
+    resetPair()
     for _, object in ipairs(body:GetChildren()) do
         if object:IsA("GuiObject") then
             object:Destroy()
@@ -564,26 +572,28 @@ local function clearBody()
 end
 
 local function heading(value)
+    resetPair()
     local frame = create("Frame", body, {
-        Size = UDim2.new(1, -3, 0, 42),
+        Size = UDim2.new(1, -3, 0, 33),
         BackgroundTransparency = 1
     })
 
-    local label = textLabel(frame, value, 20, C.ink)
+    local label = textLabel(frame, value, 17, C.ink)
     label.Position = UDim2.fromOffset(6, 5)
     label.Size = UDim2.new(1, -12, 0, 30)
     label.Font = Enum.Font.GothamBold
 end
 
 local function info(value)
+    resetPair()
     local frame = create("Frame", body, {
-        Size = UDim2.new(1, -3, 0, 76),
+        Size = UDim2.new(1, -3, 0, 55),
         BackgroundColor3 = C.tile,
         BorderSizePixel = 0
     })
     corner(frame, 8)
 
-    local label = textLabel(frame, value, 16, C.soft)
+    local label = textLabel(frame, value, 14, C.soft)
     label.Position = UDim2.fromOffset(12, 6)
     label.Size = UDim2.new(1, -24, 1, -12)
     label.TextWrapped = true
@@ -591,12 +601,13 @@ local function info(value)
 end
 
 local function button(value, callback)
+    resetPair()
     local object = create("TextButton", body, {
-        Size = UDim2.new(1, -3, 0, 52),
+        Size = UDim2.new(1, -3, 0, 42),
         BackgroundColor3 = C.tile,
         BorderSizePixel = 0,
         Text = value,
-        TextSize = 16,
+        TextSize = 14,
         TextColor3 = C.ink,
         Font = Enum.Font.GothamBold
     })
@@ -609,17 +620,35 @@ local function button(value, callback)
 end
 
 local function row(value)
-    local frame = create("Frame", body, {
-        Size = UDim2.new(1, -3, 0, 62),
+    local twoColumns = body.AbsoluteSize.X >= 490
+    local parent = body
+    if twoColumns then
+        if not currentPair or pairCount >= 2 then
+            currentPair = create("Frame", body, {
+                Size = UDim2.new(1, -3, 0, 48),
+                BackgroundTransparency = 1
+            })
+            create("UIListLayout", currentPair, {
+                FillDirection = Enum.FillDirection.Horizontal,
+                Padding = UDim.new(0, 6),
+                SortOrder = Enum.SortOrder.LayoutOrder
+            })
+            pairCount = 0
+        end
+        parent = currentPair
+        pairCount = pairCount + 1
+    end
+    local frame = create("Frame", parent, {
+        Size = twoColumns and UDim2.new(0.5, -3, 0, 48) or UDim2.new(1, -3, 0, 48),
         BackgroundColor3 = C.tile,
         BorderSizePixel = 0
     })
     corner(frame, 8)
 
     create("UIStroke", frame, {Color = C.line, Thickness = 1})
-    local label = textLabel(frame, value, 20, C.ink)
-    label.Position = UDim2.fromOffset(12, 9)
-    label.Size = UDim2.new(1, -132, 1, -18)
+    local label = textLabel(frame, value, 15, C.ink)
+    label.Position = UDim2.fromOffset(10, 5)
+    label.Size = UDim2.new(1, -92, 1, -10)
     label.Font = Enum.Font.GothamBold
     label.TextScaled = false
     label.TextWrapped = true
@@ -632,8 +661,8 @@ local function toggle(value, key, callback)
     local frame = row(value)
 
     local control = create("TextButton", frame, {
-        Position = UDim2.new(1, -80, 0.5, -19),
-        Size = UDim2.fromOffset(72, 38),
+        Position = UDim2.new(1, -73, 0.5, -16),
+        Size = UDim2.fromOffset(65, 32),
         BackgroundColor3 = C.line,
         BorderSizePixel = 0,
         TextColor3 = C.ink,
@@ -664,8 +693,8 @@ local function numberRow(value, current, callback)
     local frame = row(value)
 
     local input = create("TextBox", frame, {
-        Position = UDim2.new(1, -121, 0.5, -19),
-        Size = UDim2.fromOffset(67, 38),
+        Position = UDim2.new(1, -112, 0.5, -16),
+        Size = UDim2.fromOffset(59, 32),
         BackgroundColor3 = C.paper,
         BorderSizePixel = 0,
         Text = tostring(current),
@@ -676,8 +705,8 @@ local function numberRow(value, current, callback)
     corner(input, 6)
 
     local set = create("TextButton", frame, {
-        Position = UDim2.new(1, -50, 0.5, -19),
-        Size = UDim2.fromOffset(43, 38),
+        Position = UDim2.new(1, -49, 0.5, -16),
+        Size = UDim2.fromOffset(41, 32),
         BackgroundColor3 = C.red,
         BorderSizePixel = 0,
         Text = "SET",
@@ -2539,4 +2568,4 @@ connect(gui.Destroying, cleanup)
 
 switch("Home")
 
-print("FREAKHUB v3.0 LIGHT THEME LOADED")
+print("FREAKHUB v3.2 LIGHT THEME LOADED")
