@@ -1,6 +1,6 @@
 
 --[[
-    FREAKHUB v2.4.1
+    FREAKHUB v2.5
     FULL INTEGRATED - MOBILE EDITION
 
     Tabs:
@@ -416,7 +416,7 @@ local brandAccent = create("Frame", header, {
     BorderSizePixel = 0,
     BackgroundColor3 = C.red
 })
-local subtitle = textLabel(header, "UNIVERSAL  •  v2.4.1", 10, C.muted)
+local subtitle = textLabel(header, "UNIVERSAL  •  v2.5", 10, C.muted)
 subtitle.Position = UDim2.fromOffset(15, 33)
 
 local close = create("TextButton", header, {
@@ -704,65 +704,26 @@ local function stopClicker()
     clickStatus = "Stopped"
 end
 
-local function startClicker(mode)
+local function startAutoClick()
     stopClicker()
     if not active then return end
-    clickMode = mode
-    clickStatus = mode
-    state.autoClick = mode == "Auto"
-    state.burstClick = mode == "Burst"
+    clickMode = "Auto"
+    clickStatus = "Auto"
+    state.autoClick = true
     local token = clickToken
-
     task.spawn(function()
         local failures = 0
-        while active and clickToken == token and clickMode == mode do
-            if mode == "Hold" and not heldInput then break end
-
-            local count = mode == "Burst"
-                and math.clamp(cfg.burstCount, 1, MAX_BURST)
-                or 1
-
-            for _ = 1, count do
-                if not active or clickToken ~= token or clickMode ~= mode then
-                    break
-                end
-                if mode == "Hold" and not heldInput then break end
-
-                if performClick() then
-                    failures = 0
-                else
-                    failures = failures + 1
-                end
-                if failures >= 10 then break end
-                waitMs(cfg.clickDelay)
-            end
-
-            if failures >= 10 then
-                clickStatus = "Stopped: input unavailable"
-                break
-            end
-
-            if mode == "Burst" then
-                task.wait(math.max(cfg.burstGap, MIN_BURST_GAP_MS) / 1000)
-            end
+        while active and clickToken == token and clickMode == "Auto" do
+            if performClick() then failures = 0 else failures = failures + 1 end
+            if failures >= 10 then clickStatus = "Stopped: input unavailable"; break end
+            waitMs(cfg.clickDelay)
         end
-
         if clickToken == token then
-            local status = clickStatus
+            local previous = clickStatus
             stopClicker()
-            if status == "Stopped: input unavailable" then
-                clickStatus = status
-            end
+            if previous == "Stopped: input unavailable" then clickStatus = previous end
         end
     end)
-end
-
-local function startAutoClick()
-    startClicker("Auto")
-end
-
-local function startBurstClick()
-    startClicker("Burst")
 end
 
 local function emergencyStop()
@@ -774,66 +735,97 @@ local function emergencyStop()
     clickStatus = "EMERGENCY STOP"
 end
 
--- Floating start/stop button: uses current Auto/Burst selection.
-local floatingClickButton = create("TextButton", gui, {
-    Size = UDim2.fromOffset(122, 45),
-    Position = UDim2.new(1, -138, 1, -340),
-    BackgroundColor3 = C.green,
+-- External Auto Click panel
+local floatingPanel = create("Frame", gui, {
+    Size = UDim2.fromOffset(158, 185),
+    Position = UDim2.new(1, -169, 0.4, 0),
+    BackgroundColor3 = C.bg,
     BorderSizePixel = 0,
-    Text = "START CLICK",
-    TextSize = 12,
-    TextColor3 = C.bg,
-    Font = Enum.Font.GothamBold,
     Visible = false,
     Active = true
 })
-corner(floatingClickButton, 10)
-
-local floatingMode = "Auto"
+corner(floatingPanel, 13)
+create("UIStroke", floatingPanel, {Color = C.red, Thickness = 1.5})
+local floatingTitle = create("TextLabel", floatingPanel, {
+    Position = UDim2.fromOffset(10, 8),
+    Size = UDim2.fromOffset(138, 24),
+    BackgroundTransparency = 1,
+    Text = "FREAK HUB",
+    Font = Enum.Font.GothamBlack,
+    TextColor3 = C.white,
+    TextSize = 16
+})
+local floatingSubtitle = create("TextLabel", floatingPanel, {
+    Position = UDim2.fromOffset(10, 32),
+    Size = UDim2.fromOffset(138, 20),
+    BackgroundTransparency = 1,
+    Text = "AUTO CLICK CONTROL",
+    Font = Enum.Font.GothamMedium,
+    TextColor3 = C.red,
+    TextSize = 10
+})
+local floatingClickButton = create("TextButton", floatingPanel, {
+    Position = UDim2.fromOffset(10, 57),
+    Size = UDim2.fromOffset(138, 43),
+    BackgroundColor3 = C.red,
+    BorderSizePixel = 0,
+    Text = "START",
+    TextSize = 15,
+    TextColor3 = C.white,
+    Font = Enum.Font.GothamBold,
+    Active = true
+})
+corner(floatingClickButton, 9)
+create("TextLabel", floatingPanel, {
+    Position = UDim2.fromOffset(10, 108),
+    Size = UDim2.fromOffset(138, 18),
+    BackgroundTransparency = 1,
+    Text = "DELAY (ms)",
+    TextSize = 11,
+    TextColor3 = C.white,
+    Font = Enum.Font.GothamMedium,
+    TextXAlignment = Enum.TextXAlignment.Left
+})
+local floatingDelay = create("TextBox", floatingPanel, {
+    Position = UDim2.fromOffset(10, 131),
+    Size = UDim2.fromOffset(138, 36),
+    BackgroundColor3 = C.paper,
+    BorderSizePixel = 0,
+    Text = tostring(cfg.clickDelay),
+    TextSize = 14,
+    TextColor3 = C.ink,
+    Font = Enum.Font.GothamBold,
+    ClearTextOnFocus = false
+})
+corner(floatingDelay, 7)
 local function refreshFloatingClick()
-    local running = clickMode == "Auto" or clickMode == "Burst"
-    floatingClickButton.Text = running and "STOP CLICK" or ("START " .. string.upper(floatingMode))
-    floatingClickButton.BackgroundColor3 = running and C.red or C.green
+    local running = clickMode == "Auto"
+    floatingClickButton.Text = running and "STOP" or "START"
+    floatingClickButton.BackgroundColor3 = running
+        and Color3.fromRGB(95, 99, 112) or C.red
+    floatingDelay.Text = tostring(cfg.clickDelay)
 end
 connect(floatingClickButton.Activated, function()
-    if clickMode == "Auto" or clickMode == "Burst" then
-        stopClicker()
-    else
-        startClicker(floatingMode)
+    if clickMode == "Auto" then stopClicker() else startAutoClick() end
+    refreshFloatingClick()
+end)
+connect(floatingDelay.FocusLost, function()
+    local value = tonumber(floatingDelay.Text)
+    if value then
+        cfg.clickDelay = math.clamp(math.floor(value), MIN_CLICK_MS, 60000)
+        saveConfig()
     end
     refreshFloatingClick()
 end)
-
--- =========================================
--- KEEP CLICK MOBILE BUTTON
--- =========================================
-
-local holdButton = create("TextButton", gui, {
-    Size = UDim2.fromOffset(125, 48),
-    Position = UDim2.new(1, -138, 1, -235),
-    BackgroundColor3 = C.red,
-    BorderSizePixel = 0,
-    Text = "HOLD CLICK",
-    TextSize = 13,
-    TextColor3 = C.white,
-    Font = Enum.Font.GothamBold,
-    Visible = false,
-    Active = true
-})
-corner(holdButton, 10)
-
-connect(holdButton.InputBegan, function(input)
-    if heldInput then return end
-    if input.UserInputType == Enum.UserInputType.Touch
-        or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        startClicker("Hold")
-        heldInput = input
-    end
-end)
-
-connect(UIS.InputEnded, function(input)
-    if input == heldInput then
-        stopClicker()
+task.spawn(function()
+    while active do
+        if floatingPanel.Visible then
+            local running = clickMode == "Auto"
+            floatingClickButton.Text = running and "STOP" or "START"
+            floatingClickButton.BackgroundColor3 = running
+                and Color3.fromRGB(95, 99, 112) or C.red
+        end
+        task.wait(0.35)
     end
 end)
 
@@ -2034,115 +2026,24 @@ pages.Automation = function()
     )
 
     heading("Auto Clicker")
-    info("Enable FLOATING CLICK CONTROL, choose Auto/Burst, then press START outside the menu.")
-    button("FLOAT MODE: " .. floatingMode, function()
-        floatingMode = floatingMode == "Auto" and "Burst" or "Auto"
+    info("Single Auto Click mode. Set delay and press START / STOP on the floating panel.")
+    toggle("Show Floating Controller", "floatingClick", function(on)
+        floatingPanel.Visible = on
+        if not on then stopClicker() end
+        refreshFloatingClick()
+    end)
+    info("Status: " .. clickStatus .. " | Minimum delay: 100 ms")
+    info("Tool activation only; executor screen clicking disabled for stability.")
+    numberRow("Click Delay (ms)", cfg.clickDelay, function(value)
+        cfg.clickDelay = math.clamp(math.floor(value), MIN_CLICK_MS, 60000)
+        saveConfig()
+        refreshFloatingClick()
+    end)
+    button("START / STOP AUTO CLICK", function()
+        if clickMode == "Auto" then stopClicker() else startAutoClick() end
         refreshFloatingClick()
         switch("Automation")
     end)
-    toggle("Floating Click Control", "floatingClick", function(on)
-        floatingClickButton.Visible = on
-        if not on then stopClicker() end
-    end)
-    info("Status: " .. clickStatus .. " | Minimum delay: 100 ms")
-
-    button(
-        "CLICK METHOD: " .. cfg.clickMethod,
-        function()
-            local methods = {
-                "Tool",
-                "Hybrid",
-                "Screen"
-            }
-
-            for i, method in ipairs(methods) do
-                if method == cfg.clickMethod then
-                    cfg.clickMethod =
-                        methods[i % #methods + 1]
-                    break
-                end
-            end
-
-            switch("Automation")
-        end
-    )
-
-    toggle(
-        "Auto Click",
-        "autoClick",
-        function(on)
-            if on then
-                startAutoClick()
-            else
-                stopClicker()
-            end
-
-            switch("Automation")
-        end
-    )
-
-    toggle(
-        "Burst Click",
-        "burstClick",
-        function(on)
-            if on then
-                startBurstClick()
-            else
-                stopClicker()
-            end
-
-            switch("Automation")
-        end
-    )
-
-    toggle(
-        "Keep Click Button",
-        "keepButton",
-        function(on)
-            holdButton.Visible = on
-
-            if not on then
-                heldInput = nil
-                clickToken = clickToken + 1
-            end
-        end
-    )
-
-    numberRow(
-        "Click Delay (ms)",
-        cfg.clickDelay,
-        function(value)
-            cfg.clickDelay = math.clamp(
-                math.floor(value),
-                MIN_CLICK_MS,
-                60000
-            )
-        end
-    )
-
-    numberRow(
-        "Burst Count",
-        cfg.burstCount,
-        function(value)
-            cfg.burstCount = math.clamp(
-                math.floor(value),
-                1,
-                MAX_BURST
-            )
-        end
-    )
-
-    numberRow(
-        "Burst Gap (ms)",
-        cfg.burstGap,
-        function(value)
-            cfg.burstGap = math.clamp(
-                math.floor(value),
-                MIN_BURST_GAP_MS,
-                60000
-            )
-        end
-    )
 
     button(
         "CLICK ATTEMPTS: " .. clickAttempts .. " | TOOL CALLS: " .. clickSuccess,
@@ -2528,4 +2429,4 @@ connect(gui.Destroying, cleanup)
 
 switch("Home")
 
-print("FREAKHUB v2.4.1 LIGHT THEME LOADED")
+print("FREAKHUB v2.5 LIGHT THEME LOADED")
