@@ -1,6 +1,6 @@
 
 --[[
-    FREAKHUB v2.3
+    FREAKHUB v2.3.1
     FULL INTEGRATED - MOBILE EDITION
 
     Tabs:
@@ -43,7 +43,8 @@ end
 for _, name in ipairs({
     "FREAKHUB_V20",
     "FREAKHUB_V22",
-    "FREAKHUB_V23"
+    "FREAKHUB_V23",
+    "FREAKHUB_V231"
 }) do
     local old = PG:FindFirstChild(name)
     if old then old:Destroy() end
@@ -76,8 +77,8 @@ local cfg = {
     scanRadius = 150,
     refreshTime = 2,
 
-    clickMethod = "Hybrid",
-    clickDelay = 100,
+    clickMethod = "Tool",
+    clickDelay = 150,
     burstCount = 5,
     burstGap = 1000,
 
@@ -119,7 +120,8 @@ local state = {
 
     autoClick = false,
     burstClick = false,
-    keepButton = false
+    keepButton = false,
+    swingToggle = false
 }
 
 local connections = {}
@@ -136,7 +138,11 @@ local savedPrompts = {}
 
 local clickAttempts = 0
 local clickToken = 0
-local holdInput = nil
+local heldInput = nil
+local clickMode = "Idle"
+local clickStatus = "Ready"
+local clickSuccess = 0
+local screenBlocked = true
 
 local selectedTab = "Home"
 
@@ -221,7 +227,7 @@ end
 -- =========================================
 
 local gui = create("ScreenGui", PG, {
-    Name = "FREAKHUB_V23",
+    Name = "FREAKHUB_V231",
     ResetOnSpawn = false,
     DisplayOrder = 500
 })
@@ -232,12 +238,28 @@ local logo = create("TextButton", gui, {
     BackgroundColor3 = C.bg,
     BorderSizePixel = 0,
     Text = "F",
-    TextSize = 32,
+    TextSize = 33,
     TextColor3 = C.red,
     Font = Enum.Font.GothamBlack,
     Active = true
 })
-corner(logo, 16)
+corner(logo, 13)
+
+create("UIGradient", logo, {
+    Rotation = 135,
+    Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(32, 35, 49)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(9, 10, 16))
+    })
+})
+
+local logoAccent = create("Frame", logo, {
+    Size = UDim2.fromOffset(21, 3),
+    Position = UDim2.new(0.5, -10, 1, -7),
+    BorderSizePixel = 0,
+    BackgroundColor3 = C.red
+})
+corner(logoAccent, 2)
 
 create("UIStroke", logo, {
     Color = C.red,
@@ -280,15 +302,24 @@ end
 
 local title = textLabel(header, "FREAKHUB", 20)
 title.Position = UDim2.fromOffset(14, 3)
-title.Font = Enum.Font.GothamBold
+title.Font = Enum.Font.GothamBlack
+
+title.TextColor3 = C.white
+
+local brandAccent = create("Frame", header, {
+    Position = UDim2.fromOffset(15, 27),
+    Size = UDim2.fromOffset(77, 2),
+    BorderSizePixel = 0,
+    BackgroundColor3 = C.red
+})
 
 local subtitle = textLabel(
     header,
-    "UNIVERSAL  •  v2.3",
+    "UNIVERSAL  •  v2.3.1",
     11,
     C.red
 )
-subtitle.Position = UDim2.fromOffset(15, 30)
+subtitle.Position = UDim2.fromOffset(15, 32)
 
 local close = create("TextButton", header, {
     Position = UDim2.new(1, -41, 0, 11),
@@ -473,12 +504,10 @@ local function toggle(value, key, callback)
 
     connect(control.Activated, function()
         state[key] = not state[key]
-
+        repaint()
         if callback then
             callback(state[key])
         end
-
-        repaint()
     end)
 
     repaint()
@@ -520,138 +549,128 @@ local function numberRow(value, current, callback)
 end
 
 -- =========================================
--- CLICK ENGINE
+-- UNIVERSAL SAFE CLICK ENGINE
 -- =========================================
+-- Native executor mouse functions are intentionally disabled:
+-- pcall cannot catch a native executor crash.
+-- Tool:Activate() is best effort, not a server hit guarantee.
+
+local MIN_CLICK_MS = 100
+local MIN_BURST_GAP_MS = 300
+local MAX_BURST = 15
+local lastClickMethod = "None"
+local clickBusy = false
 
 local function toolClick()
     local tool = equippedTool()
-
     if not tool or not tool.Enabled then
         return false
     end
-
-    local success = pcall(function()
+    return pcall(function()
         tool:Activate()
     end)
+end
 
+local function performClick()
+    if not active or clickBusy then return false end
+    clickBusy = true
+    clickAttempts = clickAttempts + 1
+
+    local success = false
+    if cfg.clickMethod == "Tool" or cfg.clickMethod == "Hybrid" then
+        success = toolClick()
+        lastClickMethod = success and "Tool" or "No equipped Tool"
+    else
+        -- Screen input is blocked in stable mode to avoid Delta crashes.
+        lastClickMethod = "Screen disabled (safe mode)"
+    end
+
+    if success then clickSuccess = clickSuccess + 1 end
+    clickBusy = false
     return success
 end
 
-local function screenClick()
-    -- Executor-dependent mouse input.
-    -- These APIs may be unavailable on mobile.
-
-    if type(mouse1click) == "function" then
-        local ok = pcall(mouse1click)
-        return ok
-    end
-
-    if type(mouse1press) == "function"
-        and type(mouse1release) == "function" then
-
-        local ok = pcall(function()
-            mouse1press()
-            task.wait()
-            mouse1release()
-        end)
-
-        return ok
-    end
-
-    return false
-end
-
-local lastClickMethod = "None"
-
-local function performClick()
-    if not active then return false end
-
-    clickAttempts = clickAttempts + 1
-
-    local method = cfg.clickMethod
-
-    if method == "Tool" then
-        local ok = toolClick()
-        lastClickMethod = ok and "Tool" or "Unavailable"
-        return ok
-
-    elseif method == "Screen" then
-        local ok = screenClick()
-        lastClickMethod = ok and "Screen" or "Unavailable"
-        return ok
-
-    elseif method == "Hybrid" then
-        -- Use screen input first, then Tool fallback.
-        -- Avoid two activations per interval.
-        if screenClick() then
-            lastClickMethod = "Screen"
-            return true
-        end
-
-        local ok = toolClick()
-        lastClickMethod = ok and "Tool" or "Unavailable"
-        return ok
-    end
-
-    return false
-end
-
 local function waitMs(milliseconds)
-    task.wait(math.max(1, milliseconds) / 1000)
+    task.wait(math.max(MIN_CLICK_MS, milliseconds) / 1000)
 end
 
 local function stopClicker()
+    clickToken = clickToken + 1
     state.autoClick = false
     state.burstClick = false
-    clickToken = clickToken + 1
+    clickMode = "Idle"
+    heldInput = nil
+    clickStatus = "Stopped"
 end
 
-local function startAutoClick()
+local function startClicker(mode)
     stopClicker()
-
-    state.autoClick = true
+    if not active then return end
+    clickMode = mode
+    clickStatus = mode
+    state.autoClick = mode == "Auto"
+    state.burstClick = mode == "Burst"
     local token = clickToken
 
     task.spawn(function()
-        while active
-            and state.autoClick
-            and clickToken == token do
+        local failures = 0
+        while active and clickToken == token and clickMode == mode do
+            if mode == "Hold" and not heldInput then break end
 
-            performClick()
-            waitMs(cfg.clickDelay)
-        end
-    end)
-end
+            local count = mode == "Burst"
+                and math.clamp(cfg.burstCount, 1, MAX_BURST)
+                or 1
 
-local function startBurstClick()
-    stopClicker()
-
-    state.burstClick = true
-    local token = clickToken
-
-    task.spawn(function()
-        while active
-            and state.burstClick
-            and clickToken == token do
-
-            for i = 1, cfg.burstCount do
-                if not active
-                    or not state.burstClick
-                    or clickToken ~= token then
+            for _ = 1, count do
+                if not active or clickToken ~= token or clickMode ~= mode then
                     break
                 end
+                if mode == "Hold" and not heldInput then break end
 
-                performClick()
+                if performClick() then
+                    failures = 0
+                else
+                    failures = failures + 1
+                end
+                if failures >= 10 then break end
                 waitMs(cfg.clickDelay)
             end
 
-            if state.burstClick
-                and clickToken == token then
+            if failures >= 10 then
+                clickStatus = "Stopped: input unavailable"
+                break
+            end
 
-                waitMs(cfg.burstGap)
+            if mode == "Burst" then
+                task.wait(math.max(cfg.burstGap, MIN_BURST_GAP_MS) / 1000)
+            end
+        end
+
+        if clickToken == token then
+            local status = clickStatus
+            stopClicker()
+            if status == "Stopped: input unavailable" then
+                clickStatus = status
             end
         end
     end)
+end
+
+local function startAutoClick()
+    startClicker("Auto")
+end
+
+local function startBurstClick()
+    startClicker("Burst")
+end
+
+local function emergencyStop()
+    stopClicker()
+    state.aura = false
+    state.multi = false
+    state.swingToggle = false
+    cfg.swingEnabled = false
+    clickStatus = "EMERGENCY STOP"
 end
 
 -- =========================================
@@ -674,34 +693,34 @@ corner(holdButton, 10)
 
 connect(holdButton.InputBegan, function(input)
     if heldInput then return end
-
-    if input.UserInputType ==
-        Enum.UserInputType.Touch
-        or input.UserInputType ==
-        Enum.UserInputType.MouseButton1 then
-
-        stopClicker()
-
+    if input.UserInputType == Enum.UserInputType.Touch
+        or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        startClicker("Hold")
         heldInput = input
-        local token = clickToken
-
-        task.spawn(function()
-            while active
-                and heldInput == input
-                and clickToken == token do
-
-                performClick()
-                waitMs(cfg.clickDelay)
-            end
-        end)
     end
 end)
 
 connect(UIS.InputEnded, function(input)
     if input == heldInput then
-        heldInput = nil
-        clickToken = clickToken + 1
+        stopClicker()
     end
+end)
+
+local emergencyButton = create("TextButton", gui, {
+    Size = UDim2.fromOffset(125, 43),
+    Position = UDim2.new(1, -138, 1, -283),
+    BackgroundColor3 = Color3.fromRGB(170, 25, 46),
+    BorderSizePixel = 0,
+    Text = "STOP ALL",
+    TextSize = 13,
+    TextColor3 = C.white,
+    Font = Enum.Font.GothamBold,
+    Visible = true
+})
+corner(emergencyButton, 9)
+
+connect(emergencyButton.Activated, function()
+    emergencyStop()
 end)
 
 -- =========================================
@@ -1588,7 +1607,7 @@ local switch
 pages.Home = function()
     heading("Dashboard")
 
-    info("FREAKHUB v2.3 | Mobile Edition")
+    info("FREAKHUB v2.3.1 | Universal Stable Edition")
 
     info("Player: " .. LP.Name)
 
@@ -1884,14 +1903,15 @@ pages.Automation = function()
     )
 
     heading("Auto Clicker")
+    info("Status: " .. clickStatus .. " | Minimum delay: 100 ms")
 
     button(
         "CLICK METHOD: " .. cfg.clickMethod,
         function()
             local methods = {
+                "Tool",
                 "Hybrid",
-                "Screen",
-                "Tool"
+                "Screen"
             }
 
             for i, method in ipairs(methods) do
@@ -1953,7 +1973,7 @@ pages.Automation = function()
         function(value)
             cfg.clickDelay = math.clamp(
                 math.floor(value),
-                1,
+                MIN_CLICK_MS,
                 60000
             )
         end
@@ -1966,7 +1986,7 @@ pages.Automation = function()
             cfg.burstCount = math.clamp(
                 math.floor(value),
                 1,
-                100
+                MAX_BURST
             )
         end
     )
@@ -1977,14 +1997,14 @@ pages.Automation = function()
         function(value)
             cfg.burstGap = math.clamp(
                 math.floor(value),
-                1,
+                MIN_BURST_GAP_MS,
                 60000
             )
         end
     )
 
     button(
-        "CLICK ATTEMPTS: " .. clickAttempts,
+        "CLICK ATTEMPTS: " .. clickAttempts .. " | TOOL CALLS: " .. clickSuccess,
         function()
             switch("Automation")
         end
@@ -1999,6 +2019,7 @@ pages.Automation = function()
 
     button("RESET CLICK COUNTER", function()
         clickAttempts = 0
+        clickSuccess = 0
         switch("Automation")
     end)
 
@@ -2074,20 +2095,15 @@ pages.Automation = function()
         end
     )
 
-    button("STOP ALL AUTOMATION", function()
-        stopClicker()
-
-        state.aura = false
-        state.multi = false
-
-        heldInput = nil
+    button("EMERGENCY STOP ALL", function()
+        emergencyStop()
+        applySwingSpeed()
 
         switch("Automation")
     end)
 
     info(
-        "1 ms is accepted but not guaranteed. " ..
-        "Click attempts do not equal successful hits."
+        "Stable mode: Tool clicks only. Screen input is disabled to avoid executor crashes. Calls do not equal confirmed hits."
     )
 end
 
@@ -2357,4 +2373,4 @@ connect(gui.Destroying, cleanup)
 
 switch("Home")
 
-print("FREAKHUB v2.3 FULL INTEGRATED LOADED")
+print("FREAKHUB v2.3.1 UNIVERSAL STABLE LOADED")
