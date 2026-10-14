@@ -393,19 +393,19 @@ local header = create("Frame", window, {
 -- Lightweight abstract slash motif inspired by the reference artwork.
 -- Pure Roblox GUI elements: no external texture or asset ID needed.
 local motif = create("Frame", header, {
-    Position = UDim2.new(0.46, 0, 0, 0),
-    Size = UDim2.new(0.42, 0, 1, 0),
+    Position = UDim2.new(0.38, 0, 0, 0),
+    Size = UDim2.new(0.49, 0, 1, 0),
     BackgroundTransparency = 1,
     ClipsDescendants = true,
     ZIndex = 1
 })
 local motifStreaks = {
-    {0.08, 5, 48, 4, -23, C.red, 0.15},
-    {0.24, 14, 69, 3, -23, C.white, 0.28},
-    {0.38, 1, 52, 5, -23, C.red, 0.36},
-    {0.53, 20, 73, 3, -23, C.white, 0.15},
-    {0.69, 7, 54, 4, -23, C.red, 0.22},
-    {0.85, 25, 44, 3, -23, C.white, 0.35}
+    {0.08, 5, 58, 9, -23, C.red, 0.03},
+    {0.24, 14, 78, 7, -23, C.white, 0.08},
+    {0.38, 1, 65, 8, -23, C.red, 0.07},
+    {0.53, 20, 83, 6, -23, C.white, 0.04},
+    {0.69, 7, 65, 8, -23, C.red, 0.08},
+    {0.85, 25, 58, 7, -23, C.white, 0.08}
 }
 for _, strokeData in ipairs(motifStreaks) do
     local streak = create("Frame", motif, {
@@ -434,6 +434,7 @@ local function textLabel(parent, text, size, color)
         BackgroundTransparency = 1,
         Text = text,
         TextSize = size or 13,
+        TextScaled = false,
         TextColor3 = color or C.white,
         Font = Enum.Font.GothamMedium,
         TextXAlignment = Enum.TextXAlignment.Left,
@@ -455,7 +456,7 @@ local brandAccent = create("Frame", header, {
     BorderSizePixel = 0,
     BackgroundColor3 = C.red
 })
-local subtitle = textLabel(header, "UNIVERSAL  •  v2.7", 9, C.muted)
+local subtitle = textLabel(header, "UNIVERSAL  •  v3.0", 12, C.muted)
 subtitle.Position = UDim2.fromOffset(22, 33)
 
 local close = create("TextButton", header, {
@@ -616,10 +617,11 @@ local function row(value)
     corner(frame, 8)
 
     create("UIStroke", frame, {Color = C.line, Thickness = 1})
-    local label = textLabel(frame, value, 17, C.ink)
+    local label = textLabel(frame, value, 20, C.ink)
     label.Position = UDim2.fromOffset(12, 9)
-    label.Size = UDim2.new(1, -135, 1, -18)
+    label.Size = UDim2.new(1, -132, 1, -18)
     label.Font = Enum.Font.GothamBold
+    label.TextScaled = false
     label.TextWrapped = true
     label.TextTruncate = Enum.TextTruncate.None
 
@@ -2537,4 +2539,4 @@ connect(gui.Destroying, cleanup)
 
 switch("Home")
 
-print("FREAKHUB v2.7 LIGHT THEME LOADED")
+print("FREAKHUB v3.0 LIGHT THEME LOADED")
