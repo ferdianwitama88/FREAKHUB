@@ -1,6 +1,6 @@
 
 --[[
-    FREAKHUB v2.7
+    FREAKHUB v2.8
     FULL INTEGRATED - MOBILE EDITION
 
     Tabs:
@@ -404,11 +404,11 @@ local function textLabel(parent, text, size, color)
 end
 
 local title = textLabel(header, "FREAK", 14, C.white)
-title.Position = UDim2.fromOffset(14, 3)
+title.Position = UDim2.fromOffset(22, 3)
 title.Size = UDim2.fromOffset(55, 22)
 title.Font = Enum.Font.GothamBlack
 local titleHub = textLabel(header, "HUB", 14, C.red)
-titleHub.Position = UDim2.fromOffset(70, 3)
+titleHub.Position = UDim2.fromOffset(79, 3)
 titleHub.Size = UDim2.fromOffset(40, 22)
 titleHub.Font = Enum.Font.GothamBlack
 local brandAccent = create("Frame", header, {
@@ -418,7 +418,7 @@ local brandAccent = create("Frame", header, {
     BackgroundColor3 = C.red
 })
 local subtitle = textLabel(header, "UNIVERSAL  •  v2.7", 9, C.muted)
-subtitle.Position = UDim2.fromOffset(15, 33)
+subtitle.Position = UDim2.fromOffset(22, 33)
 
 local close = create("TextButton", header, {
     Position = UDim2.new(1, -41, 0, 11),
@@ -490,7 +490,7 @@ local function applyUISize()
                 baseFonts[object] = object.TextSize
             end
 
-            local minimum = (object == title or object == titleHub) and 11 or 12
+            local minimum = (object == title or object == titleHub) and 11 or 14
             object.TextSize = math.max(
                 minimum,
                 math.floor(baseFonts[object] * factor + 0.5)
@@ -526,37 +526,38 @@ end
 
 local function heading(value)
     local frame = create("Frame", body, {
-        Size = UDim2.new(1, -3, 0, 31),
+        Size = UDim2.new(1, -3, 0, 42),
         BackgroundTransparency = 1
     })
 
-    local label = textLabel(frame, value, 15, C.ink)
-    label.Position = UDim2.fromOffset(3, 4)
+    local label = textLabel(frame, value, 20, C.ink)
+    label.Position = UDim2.fromOffset(6, 5)
+    label.Size = UDim2.new(1, -12, 0, 30)
     label.Font = Enum.Font.GothamBold
 end
 
 local function info(value)
     local frame = create("Frame", body, {
-        Size = UDim2.new(1, -3, 0, 49),
+        Size = UDim2.new(1, -3, 0, 76),
         BackgroundColor3 = C.tile,
         BorderSizePixel = 0
     })
     corner(frame, 8)
 
-    local label = textLabel(frame, value, 11, C.soft)
-    label.Position = UDim2.fromOffset(8, 4)
-    label.Size = UDim2.new(1, -16, 1, -8)
+    local label = textLabel(frame, value, 16, C.soft)
+    label.Position = UDim2.fromOffset(12, 6)
+    label.Size = UDim2.new(1, -24, 1, -12)
     label.TextWrapped = true
     label.TextTruncate = Enum.TextTruncate.None
 end
 
 local function button(value, callback)
     local object = create("TextButton", body, {
-        Size = UDim2.new(1, -3, 0, 39),
+        Size = UDim2.new(1, -3, 0, 52),
         BackgroundColor3 = C.tile,
         BorderSizePixel = 0,
         Text = value,
-        TextSize = 12,
+        TextSize = 16,
         TextColor3 = C.ink,
         Font = Enum.Font.GothamBold
     })
@@ -570,16 +571,19 @@ end
 
 local function row(value)
     local frame = create("Frame", body, {
-        Size = UDim2.new(1, -3, 0, 42),
+        Size = UDim2.new(1, -3, 0, 62),
         BackgroundColor3 = C.tile,
         BorderSizePixel = 0
     })
     corner(frame, 8)
 
     create("UIStroke", frame, {Color = C.line, Thickness = 1})
-    local label = textLabel(frame, value, 11, C.ink)
-    label.Position = UDim2.fromOffset(8, 10)
-    label.Size = UDim2.new(0.56, -8, 0, 22)
+    local label = textLabel(frame, value, 17, C.ink)
+    label.Position = UDim2.fromOffset(12, 9)
+    label.Size = UDim2.new(1, -135, 1, -18)
+    label.Font = Enum.Font.GothamBold
+    label.TextWrapped = true
+    label.TextTruncate = Enum.TextTruncate.None
 
     return frame
 end
@@ -588,8 +592,8 @@ local function toggle(value, key, callback)
     local frame = row(value)
 
     local control = create("TextButton", frame, {
-        Position = UDim2.new(1, -66, 0, 7),
-        Size = UDim2.fromOffset(59, 28),
+        Position = UDim2.new(1, -80, 0.5, -19),
+        Size = UDim2.fromOffset(72, 38),
         BackgroundColor3 = C.line,
         BorderSizePixel = 0,
         TextColor3 = C.ink,
@@ -620,8 +624,8 @@ local function numberRow(value, current, callback)
     local frame = row(value)
 
     local input = create("TextBox", frame, {
-        Position = UDim2.new(1, -110, 0, 7),
-        Size = UDim2.fromOffset(61, 28),
+        Position = UDim2.new(1, -121, 0.5, -19),
+        Size = UDim2.fromOffset(67, 38),
         BackgroundColor3 = C.paper,
         BorderSizePixel = 0,
         Text = tostring(current),
@@ -632,12 +636,12 @@ local function numberRow(value, current, callback)
     corner(input, 6)
 
     local set = create("TextButton", frame, {
-        Position = UDim2.new(1, -46, 0, 7),
-        Size = UDim2.fromOffset(39, 28),
+        Position = UDim2.new(1, -50, 0.5, -19),
+        Size = UDim2.fromOffset(43, 38),
         BackgroundColor3 = C.red,
         BorderSizePixel = 0,
         Text = "SET",
-        TextSize = 11,
+        TextSize = 15,
         TextColor3 = C.white
     })
     corner(set, 6)
