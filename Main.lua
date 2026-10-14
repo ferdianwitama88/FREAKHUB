@@ -390,6 +390,44 @@ local header = create("Frame", window, {
     Active = true
 })
 
+-- Lightweight abstract slash motif inspired by the reference artwork.
+-- Pure Roblox GUI elements: no external texture or asset ID needed.
+local motif = create("Frame", header, {
+    Position = UDim2.new(0.46, 0, 0, 0),
+    Size = UDim2.new(0.42, 0, 1, 0),
+    BackgroundTransparency = 1,
+    ClipsDescendants = true,
+    ZIndex = 1
+})
+local motifStreaks = {
+    {0.08, 5, 48, 4, -23, C.red, 0.15},
+    {0.24, 14, 69, 3, -23, C.white, 0.28},
+    {0.38, 1, 52, 5, -23, C.red, 0.36},
+    {0.53, 20, 73, 3, -23, C.white, 0.15},
+    {0.69, 7, 54, 4, -23, C.red, 0.22},
+    {0.85, 25, 44, 3, -23, C.white, 0.35}
+}
+for _, strokeData in ipairs(motifStreaks) do
+    local streak = create("Frame", motif, {
+        Position = UDim2.new(strokeData[1], 0, 0, strokeData[2]),
+        Size = UDim2.fromOffset(strokeData[3], strokeData[4]),
+        Rotation = strokeData[5],
+        BackgroundColor3 = strokeData[6],
+        BackgroundTransparency = strokeData[7],
+        BorderSizePixel = 0,
+        ZIndex = 1
+    })
+    corner(streak, 2)
+end
+create("Frame", header, {
+    Position = UDim2.new(0, 0, 1, -2),
+    Size = UDim2.new(1, 0, 0, 2),
+    BackgroundColor3 = C.red,
+    BackgroundTransparency = 0.2,
+    BorderSizePixel = 0,
+    ZIndex = 1
+})
+
 local function textLabel(parent, text, size, color)
     return create("TextLabel", parent, {
         Size = UDim2.new(1, 0, 0, 23),
