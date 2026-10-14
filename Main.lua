@@ -1,6 +1,6 @@
 
 --[[
-    FREAKHUB v2.6.1
+    FREAKHUB v2.7
     FULL INTEGRATED - MOBILE EDITION
 
     Tabs:
@@ -417,7 +417,7 @@ local brandAccent = create("Frame", header, {
     BorderSizePixel = 0,
     BackgroundColor3 = C.red
 })
-local subtitle = textLabel(header, "UNIVERSAL  •  v2.6.1", 9, C.muted)
+local subtitle = textLabel(header, "UNIVERSAL  •  v2.7", 9, C.muted)
 subtitle.Position = UDim2.fromOffset(15, 33)
 
 local close = create("TextButton", header, {
@@ -2274,11 +2274,67 @@ local tabNames = {
     "Home", "Player", "ESP", "Scanner", "Results",
     "Aim", "Automation", "Teleport", "Utility"
 }
-local tabIcons = {
-    Home = "⌂", Player = "♙", ESP = "◉", Scanner = "⌕",
-    Results = "▤", Aim = "⊕", Automation = "⚙",
-    Teleport = "◆", Utility = "☷"
-}
+-- Vector-like menu icons built from Roblox GUI shapes (no missing asset IDs).
+local function drawMenuIcon(parent, name)
+    local icon = create("Frame", parent, {
+        Position = UDim2.fromOffset(7, 11),
+        Size = UDim2.fromOffset(22, 22),
+        BackgroundTransparency = 1
+    })
+    local function shape(x,y,w,h,round,filled)
+        local obj = create("Frame", icon, {
+            Position = UDim2.fromOffset(x,y),
+            Size = UDim2.fromOffset(w,h),
+            BackgroundColor3 = C.white,
+            BackgroundTransparency = filled and 0 or 1,
+            BorderSizePixel = 0
+        })
+        if round then corner(obj, round) end
+        if not filled then create("UIStroke", obj, {Color=C.white, Thickness=2}) end
+        return obj
+    end
+    local function dot(x,y,d) shape(x,y,d,d,d,true) end
+    if name == "Home" then
+        shape(3,9,16,12,3,false)
+        local roof = shape(4,5,14,3,2,true)
+        roof.Rotation = -25
+        shape(9,14,4,7,1,true)
+    elseif name == "Player" then
+        shape(8,1,7,7,7,false)
+        shape(4,12,15,9,8,false)
+    elseif name == "ESP" then
+        shape(1,6,20,11,10,false)
+        dot(9,8,5)
+    elseif name == "Scanner" then
+        shape(2,2,13,13,13,false)
+        local handle = shape(14,14,9,3,2,true)
+        handle.Rotation = 45
+    elseif name == "Results" then
+        shape(3,1,16,20,2,false)
+        for y=6,16,5 do shape(7,y,9,2,1,true) end
+    elseif name == "Aim" then
+        shape(3,3,16,16,16,false)
+        shape(10,0,2,7,1,true)
+        shape(10,15,2,7,1,true)
+        shape(0,10,7,2,1,true)
+        shape(15,10,7,2,1,true)
+    elseif name == "Automation" then
+        shape(4,4,14,14,14,false)
+        dot(9,9,4)
+        for _,p in ipairs({{10,0,2,5},{10,17,2,5},{0,10,5,2},{17,10,5,2}}) do
+            shape(p[1],p[2],p[3],p[4],1,true)
+        end
+    elseif name == "Teleport" then
+        shape(5,1,12,12,12,false)
+        dot(9,5,4)
+        local tip = shape(9,12,5,9,1,true)
+        tip.Rotation = 25
+    else
+        shape(3,3,16,16,4,false)
+        shape(7,7,8,8,2,true)
+    end
+end
+
 for index, name in ipairs(tabNames) do
     local tab = create("TextButton", sidebar, {
         Size = UDim2.new(1, 0, 0, 46),
@@ -2289,15 +2345,7 @@ for index, name in ipairs(tabNames) do
         AutoButtonColor = true
     })
     corner(tab, 8)
-    local icon = create("TextLabel", tab, {
-        Position = UDim2.fromOffset(6, 4),
-        Size = UDim2.fromOffset(26, 37),
-        BackgroundTransparency = 1,
-        Text = tabIcons[name] or "•",
-        TextSize = 21,
-        TextColor3 = C.white,
-        Font = Enum.Font.GothamBold
-    })
+    drawMenuIcon(tab, name)
     local caption = create("TextLabel", tab, {
         Position = UDim2.fromOffset(32, 5),
         Size = UDim2.new(1, -34, 0, 36),
@@ -2447,4 +2495,4 @@ connect(gui.Destroying, cleanup)
 
 switch("Home")
 
-print("FREAKHUB v2.6.1 LIGHT THEME LOADED")
+print("FREAKHUB v2.7 LIGHT THEME LOADED")
