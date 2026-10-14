@@ -1,6 +1,6 @@
 
 --[[
-    FREAKHUB v2.5
+    FREAKHUB v2.6
     FULL INTEGRATED - MOBILE EDITION
 
     Tabs:
@@ -402,21 +402,21 @@ local function textLabel(parent, text, size, color)
     })
 end
 
-local title = textLabel(header, "FREAK", 20, C.white)
+local title = textLabel(header, "FREAK", 14, C.white)
 title.Position = UDim2.fromOffset(14, 3)
-title.Size = UDim2.fromOffset(78, 24)
+title.Size = UDim2.fromOffset(55, 22)
 title.Font = Enum.Font.GothamBlack
-local titleHub = textLabel(header, "HUB", 20, C.red)
-titleHub.Position = UDim2.fromOffset(92, 3)
-titleHub.Size = UDim2.fromOffset(60, 24)
+local titleHub = textLabel(header, "HUB", 14, C.red)
+titleHub.Position = UDim2.fromOffset(70, 3)
+titleHub.Size = UDim2.fromOffset(40, 22)
 titleHub.Font = Enum.Font.GothamBlack
 local brandAccent = create("Frame", header, {
     Position = UDim2.fromOffset(15, 28),
-    Size = UDim2.fromOffset(135, 2),
+    Size = UDim2.fromOffset(94, 2),
     BorderSizePixel = 0,
     BackgroundColor3 = C.red
 })
-local subtitle = textLabel(header, "UNIVERSAL  •  v2.5", 10, C.muted)
+local subtitle = textLabel(header, "UNIVERSAL  •  v2.6", 9, C.muted)
 subtitle.Position = UDim2.fromOffset(15, 33)
 
 local close = create("TextButton", header, {
@@ -432,7 +432,7 @@ corner(close, 8)
 
 local sidebar = create("ScrollingFrame", window, {
     Position = UDim2.fromOffset(9, 60),
-    Size = UDim2.new(0, 109, 1, -69),
+    Size = UDim2.new(0, 125, 1, -69),
     BackgroundColor3 = C.bg,
     BorderSizePixel = 0,
     ScrollBarThickness = 0,
@@ -454,8 +454,8 @@ create("UIListLayout", sidebar, {
 })
 
 local body = create("ScrollingFrame", window, {
-    Position = UDim2.fromOffset(125, 60),
-    Size = UDim2.new(1, -135, 1, -69),
+    Position = UDim2.fromOffset(141, 60),
+    Size = UDim2.new(1, -151, 1, -69),
     BackgroundColor3 = C.paper,
     BorderSizePixel = 0,
     ScrollBarThickness = 2,
@@ -475,10 +475,10 @@ local baseFonts = setmetatable({}, {
 
 local function applyUISize()
     local factor = ({
-        Small = 1,
-        Normal = 1.15,
-        Large = 1.30
-    })[cfg.uiSize] or 1.15
+        Small = 0.90,
+        Normal = 1,
+        Large = 1.10
+    })[cfg.uiSize] or 1
 
     for _, object in ipairs(gui:GetDescendants()) do
         if object:IsA("TextLabel")
@@ -489,8 +489,9 @@ local function applyUISize()
                 baseFonts[object] = object.TextSize
             end
 
+            local minimum = (object == title or object == titleHub) and 11 or 9
             object.TextSize = math.max(
-                12,
+                minimum,
                 math.floor(baseFonts[object] * factor + 0.5)
             )
         end
@@ -508,8 +509,8 @@ local function applyUISize()
         })[cfg.uiSize] or 1
 
         window.Size = UDim2.fromOffset(
-            math.min(390 * scale, viewport.X - 12),
-            math.min(410 * scale, viewport.Y - 20)
+            math.max(255, math.min(470 * scale, viewport.X - 12)),
+            math.max(270, math.min(470 * scale, viewport.Y - 20))
         )
     end
 end
@@ -737,8 +738,8 @@ end
 
 -- External Auto Click panel
 local floatingPanel = create("Frame", gui, {
-    Size = UDim2.fromOffset(158, 185),
-    Position = UDim2.new(1, -169, 0.4, 0),
+    Size = UDim2.fromOffset(150, 185),
+    Position = UDim2.new(1, -161, 0.4, 0),
     BackgroundColor3 = C.bg,
     BorderSizePixel = 0,
     Visible = false,
@@ -748,12 +749,12 @@ corner(floatingPanel, 13)
 create("UIStroke", floatingPanel, {Color = C.red, Thickness = 1.5})
 local floatingTitle = create("TextLabel", floatingPanel, {
     Position = UDim2.fromOffset(10, 8),
-    Size = UDim2.fromOffset(138, 24),
+    Size = UDim2.fromOffset(130, 24),
     BackgroundTransparency = 1,
     Text = "FREAK HUB",
     Font = Enum.Font.GothamBlack,
     TextColor3 = C.white,
-    TextSize = 16
+    TextSize = 12
 })
 local floatingSubtitle = create("TextLabel", floatingPanel, {
     Position = UDim2.fromOffset(10, 32),
@@ -2262,37 +2263,47 @@ end
 -- =========================================
 
 local tabs = {}
-
 local tabNames = {
-    "Home",
-    "Player",
-    "ESP",
-    "Scanner",
-    "Results",
-    "Aim",
-    "Automation",
-    "Teleport",
-    "Utility"
+    "Home", "Player", "ESP", "Scanner", "Results",
+    "Aim", "Automation", "Teleport", "Utility"
 }
-
-for i, name in ipairs(tabNames) do
+local tabIcons = {
+    Home = "⌂", Player = "♙", ESP = "◉", Scanner = "⌕",
+    Results = "▤", Aim = "⊕", Automation = "⚙",
+    Teleport = "◆", Utility = "☷"
+}
+for index, name in ipairs(tabNames) do
     local tab = create("TextButton", sidebar, {
-        Size = UDim2.new(1, 0, 0, 39),
+        Size = UDim2.new(1, 0, 0, 43),
         BackgroundColor3 = C.panel,
         BorderSizePixel = 0,
-        Text = name,
-        TextSize = 12,
-        TextColor3 = C.white,
-        Font = Enum.Font.GothamMedium,
-        LayoutOrder = i
+        Text = "",
+        LayoutOrder = index,
+        AutoButtonColor = true
     })
     corner(tab, 8)
-
+    local icon = create("TextLabel", tab, {
+        Position = UDim2.fromOffset(6, 4),
+        Size = UDim2.fromOffset(27, 34),
+        BackgroundTransparency = 1,
+        Text = tabIcons[name] or "•",
+        TextSize = 20,
+        TextColor3 = C.white,
+        Font = Enum.Font.GothamBold
+    })
+    local caption = create("TextLabel", tab, {
+        Position = UDim2.fromOffset(35, 5),
+        Size = UDim2.new(1, -38, 0, 33),
+        BackgroundTransparency = 1,
+        Text = name,
+        TextSize = 11,
+        TextColor3 = C.white,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd
+    })
     tabs[name] = tab
-
-    connect(tab.Activated, function()
-        switch(name)
-    end)
+    connect(tab.Activated, function() switch(name) end)
 end
 
 switch = function(name)
@@ -2429,4 +2440,4 @@ connect(gui.Destroying, cleanup)
 
 switch("Home")
 
-print("FREAKHUB v2.5 LIGHT THEME LOADED")
+print("FREAKHUB v2.6 LIGHT THEME LOADED")
