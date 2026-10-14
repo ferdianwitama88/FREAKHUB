@@ -1,6 +1,6 @@
 
 --[[
-    FREAKHUB v2.4
+    FREAKHUB v2.4.1
     FULL INTEGRATED - MOBILE EDITION
 
     Tabs:
@@ -61,7 +61,12 @@ local C = {
     red = Color3.fromRGB(235, 52, 73),
     white = Color3.fromRGB(245, 246, 250),
     muted = Color3.fromRGB(170, 175, 190),
-    green = Color3.fromRGB(75, 210, 145)
+    green = Color3.fromRGB(75, 210, 145),
+    paper = Color3.fromRGB(247, 248, 252),
+    tile = Color3.fromRGB(255, 255, 255),
+    ink = Color3.fromRGB(31, 36, 49),
+    soft = Color3.fromRGB(95, 103, 120),
+    line = Color3.fromRGB(218, 222, 231)
 }
 
 -- =========================================
@@ -365,7 +370,7 @@ local window = create("Frame", gui, {
     Size = UDim2.fromOffset(390, 410),
     Position = UDim2.fromScale(0.5, 0.5),
     AnchorPoint = Vector2.new(0.5, 0.5),
-    BackgroundColor3 = C.bg,
+    BackgroundColor3 = C.paper,
     BorderSizePixel = 0,
     Visible = false,
     Active = true
@@ -373,12 +378,14 @@ local window = create("Frame", gui, {
 corner(window, 15)
 
 create("UIStroke", window, {
-    Color = C.card
+    Color = C.red,
+    Thickness = 1.5
 })
 
 local header = create("Frame", window, {
     Size = UDim2.new(1, 0, 0, 55),
-    BackgroundTransparency = 1,
+    BackgroundColor3 = C.bg,
+    BorderSizePixel = 0,
     Active = true
 })
 
@@ -409,7 +416,7 @@ local brandAccent = create("Frame", header, {
     BorderSizePixel = 0,
     BackgroundColor3 = C.red
 })
-local subtitle = textLabel(header, "UNIVERSAL  •  v2.4", 10, C.muted)
+local subtitle = textLabel(header, "UNIVERSAL  •  v2.4.1", 10, C.muted)
 subtitle.Position = UDim2.fromOffset(15, 33)
 
 local close = create("TextButton", header, {
@@ -426,7 +433,7 @@ corner(close, 8)
 local sidebar = create("ScrollingFrame", window, {
     Position = UDim2.fromOffset(9, 60),
     Size = UDim2.new(0, 109, 1, -69),
-    BackgroundColor3 = C.panel,
+    BackgroundColor3 = C.bg,
     BorderSizePixel = 0,
     ScrollBarThickness = 0,
     AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -449,7 +456,7 @@ create("UIListLayout", sidebar, {
 local body = create("ScrollingFrame", window, {
     Position = UDim2.fromOffset(125, 60),
     Size = UDim2.new(1, -135, 1, -69),
-    BackgroundTransparency = 1,
+    BackgroundColor3 = C.paper,
     BorderSizePixel = 0,
     ScrollBarThickness = 2,
     ScrollBarImageColor3 = C.red,
@@ -521,7 +528,7 @@ local function heading(value)
         BackgroundTransparency = 1
     })
 
-    local label = textLabel(frame, value, 15)
+    local label = textLabel(frame, value, 15, C.ink)
     label.Position = UDim2.fromOffset(3, 4)
     label.Font = Enum.Font.GothamBold
 end
@@ -529,12 +536,12 @@ end
 local function info(value)
     local frame = create("Frame", body, {
         Size = UDim2.new(1, -3, 0, 49),
-        BackgroundColor3 = C.panel,
+        BackgroundColor3 = C.tile,
         BorderSizePixel = 0
     })
     corner(frame, 8)
 
-    local label = textLabel(frame, value, 11, C.muted)
+    local label = textLabel(frame, value, 11, C.soft)
     label.Position = UDim2.fromOffset(8, 4)
     label.Size = UDim2.new(1, -16, 1, -8)
     label.TextWrapped = true
@@ -544,14 +551,15 @@ end
 local function button(value, callback)
     local object = create("TextButton", body, {
         Size = UDim2.new(1, -3, 0, 39),
-        BackgroundColor3 = C.card,
+        BackgroundColor3 = C.tile,
         BorderSizePixel = 0,
         Text = value,
         TextSize = 12,
-        TextColor3 = C.white,
-        Font = Enum.Font.GothamMedium
+        TextColor3 = C.ink,
+        Font = Enum.Font.GothamBold
     })
     corner(object, 8)
+    create("UIStroke", object, {Color = C.line, Thickness = 1})
 
     connect(object.Activated, callback)
 
@@ -561,12 +569,13 @@ end
 local function row(value)
     local frame = create("Frame", body, {
         Size = UDim2.new(1, -3, 0, 42),
-        BackgroundColor3 = C.card,
+        BackgroundColor3 = C.tile,
         BorderSizePixel = 0
     })
     corner(frame, 8)
 
-    local label = textLabel(frame, value, 11)
+    create("UIStroke", frame, {Color = C.line, Thickness = 1})
+    local label = textLabel(frame, value, 11, C.ink)
     label.Position = UDim2.fromOffset(8, 10)
     label.Size = UDim2.new(0.56, -8, 0, 22)
 
@@ -579,9 +588,9 @@ local function toggle(value, key, callback)
     local control = create("TextButton", frame, {
         Position = UDim2.new(1, -66, 0, 7),
         Size = UDim2.fromOffset(59, 28),
-        BackgroundColor3 = C.panel,
+        BackgroundColor3 = C.line,
         BorderSizePixel = 0,
-        TextColor3 = C.white,
+        TextColor3 = C.ink,
         TextSize = 11,
         Font = Enum.Font.GothamBold
     })
@@ -590,7 +599,8 @@ local function toggle(value, key, callback)
     local function repaint()
         control.Text = state[key] and "ON" or "OFF"
         control.BackgroundColor3 =
-            state[key] and C.red or C.panel
+            state[key] and C.red or C.line
+        control.TextColor3 = state[key] and C.white or C.ink
     end
 
     connect(control.Activated, function()
@@ -610,11 +620,11 @@ local function numberRow(value, current, callback)
     local input = create("TextBox", frame, {
         Position = UDim2.new(1, -110, 0, 7),
         Size = UDim2.fromOffset(61, 28),
-        BackgroundColor3 = C.panel,
+        BackgroundColor3 = C.paper,
         BorderSizePixel = 0,
         Text = tostring(current),
         TextSize = 12,
-        TextColor3 = C.white,
+        TextColor3 = C.ink,
         ClearTextOnFocus = false
     })
     corner(input, 6)
@@ -2367,7 +2377,7 @@ local tabNames = {
 for i, name in ipairs(tabNames) do
     local tab = create("TextButton", sidebar, {
         Size = UDim2.new(1, 0, 0, 39),
-        BackgroundColor3 = C.card,
+        BackgroundColor3 = C.panel,
         BorderSizePixel = 0,
         Text = name,
         TextSize = 12,
@@ -2395,7 +2405,7 @@ switch = function(name)
 
     for tabName, object in pairs(tabs) do
         object.BackgroundColor3 =
-            tabName == name and C.red or C.card
+            tabName == name and C.red or C.panel
     end
 
     applyUISize()
@@ -2518,4 +2528,4 @@ connect(gui.Destroying, cleanup)
 
 switch("Home")
 
-print("FREAKHUB v2.4 CONFIG + FLOATING CONTROL LOADED")
+print("FREAKHUB v2.4.1 LIGHT THEME LOADED")
